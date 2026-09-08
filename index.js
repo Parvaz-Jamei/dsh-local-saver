@@ -66,6 +66,18 @@ function snapshot() {
   };
 }
 
+function formatStats(value) {
+  return (
+    `local-saver enabled=${value.enabled} level=${value.level} mode=${value.mode} dry_run=${value.dry_run} strip_comments=${value.strip_comments} hook=${value.hook_attached} event=${value.hook_event}\n` +
+    `processed=${value.processed_calls} compressed=${value.compressed_calls}\n` +
+    `comments lang=${value.comments_language} seen=${value.comments_seen} removed=${value.comments_removed} kept=${value.comments_kept}\n` +
+    `Before: ${value.chars_before} chars (~${value.tokens_before} tokens approx chars/4)\n` +
+    `After: ${value.chars_after} chars (~${value.tokens_after} tokens approx chars/4)\n` +
+    `Saved: ${value.chars_saved} chars (~${value.tokens_saved} tokens approx chars/4)\n` +
+    `last=${value.last_tool} kind=${value.last_kind} filter=${value.last_filter}`
+  );
+}
+
 function persistDebounced() {
   if (!parsePersist()) return;
   if (persistTimer) return;
@@ -75,78 +87,10 @@ function persistDebounced() {
   }, 2000);
 }
 
-const statsSchema = {
-  type: "object",
-  additionalProperties: false,
-  required: [
-    "enabled",
-    "level",
-    "mode",
-    "dry_run",
-    "strip_comments",
-    "processed_calls",
-    "compressed_calls",
-    "calls",
-    "chars_before",
-    "chars_after",
-    "chars_saved",
-    "tokens_before",
-    "tokens_after",
-    "tokens_saved",
-    "last_tool",
-    "last_filter",
-    "last_kind",
-    "comments_language",
-    "comments_seen",
-    "comments_removed",
-    "comments_kept",
-    "hook_attached",
-    "hook_event",
-    "tokens_note",
-  ],
-  properties: {
-    enabled: { type: "boolean" },
-    level: { type: "number" },
-    mode: { type: "string" },
-    dry_run: { type: "boolean" },
-    strip_comments: { type: "string" },
-    processed_calls: { type: "number" },
-    compressed_calls: { type: "number" },
-    calls: { type: "number" },
-    chars_before: { type: "number" },
-    chars_after: { type: "number" },
-    chars_saved: { type: "number" },
-    tokens_before: { type: "number" },
-    tokens_after: { type: "number" },
-    tokens_saved: { type: "number" },
-    last_tool: { type: "string" },
-    last_filter: { type: "string" },
-    last_kind: { type: "string" },
-    comments_language: { type: "string" },
-    comments_seen: { type: "number" },
-    comments_removed: { type: "number" },
-    comments_kept: { type: "number" },
-    hook_attached: { type: "boolean" },
-    hook_event: { type: "string" },
-    tokens_note: { type: "string" },
-  },
+const stringOut = {
+  schema: { type: "string" },
+  render: (_a, v) => [{ type: "text", text: String(v) }],
 };
-
-function renderStats(value) {
-  return [
-    {
-      type: "text",
-      text:
-        `local-saver enabled=${value.enabled} level=${value.level} mode=${value.mode} dry_run=${value.dry_run} strip_comments=${value.strip_comments} hook=${value.hook_attached} event=${value.hook_event}\n` +
-        `processed=${value.processed_calls} compressed=${value.compressed_calls}\n` +
-        `comments lang=${value.comments_language} seen=${value.comments_seen} removed=${value.comments_removed} kept=${value.comments_kept}\n` +
-        `Before: ${value.chars_before} chars (~${value.tokens_before} tokens approx chars/4)\n` +
-        `After: ${value.chars_after} chars (~${value.tokens_after} tokens approx chars/4)\n` +
-        `Saved: ${value.chars_saved} chars (~${value.tokens_saved} tokens approx chars/4)\n` +
-        `last=${value.last_tool} kind=${value.last_kind} filter=${value.last_filter}`,
-    },
-  ];
-}
 
 export function apply(ctx) {
   if (parsePersist()) {
@@ -161,21 +105,24 @@ export function apply(ctx) {
       .catch(() => {});
   }
 
-  const statusLine = `local-saver ${state.enabled ? "ON" : "OFF"} mode=${state.mode} level=${state.level} strip_comments=${stripLabel()}. Compression may drop tool text. Tokens in stats are approx chars/4.`;
   try {
     const section = ctx.systemPrompt && ctx.systemPrompt.section;
     if (typeof section === "function") {
-      section.call(ctx.systemPrompt, { name: "local-saver-status", order: 40, text: statusLine });
+      section.call(ctx.systemPrompt, {
+        name: "local-saver-status",
+        order: 40,
+        text: `local-saver ${state.enabled ? "ON" : "OFF"} mode=${state.mode} level=${state.level} strip_comments=${stripLabel()}. Compression may drop tool text.`,
+      });
       if (parseCaveman()) {
         section.call(ctx.systemPrompt, {
           name: "local-saver-terse",
           order: 50,
-          text: "Terse. No preamble. No restating the question. Prefer offsets/limits on read. Do not dump whole files. Keep exact code, paths, error lines.",
+          text: "Terse. No preamble. Prefer offsets/limits on read. Keep exact code, paths, error lines.",
         });
       }
     }
   } catch {
-    // Cordis forbids ctx.systemPrompt unless inject lists it. Tools still work.
+    // ignore missing systemPrompt inject
   }
 
   ctx.tools.register(
@@ -183,9 +130,9 @@ export function apply(ctx) {
       name: "local_saver_stats",
       description: "Show dsh-local-saver stats. Token counts are approx (chars/4), not provider usage. Local only.",
       parameters: {},
-      output: { schema: statsSchema, render: (_a, v) => renderStats(v) },
+      output: stringOut,
       async execute() {
-        return snapshot();
+        return formatStats(snapshot());
       },
     }),
   );
@@ -204,7 +151,7 @@ export function apply(ctx) {
           description: "off | preview | on. Default off. preview reports counts without deleting.",
         },
       },
-      output: { schema: statsSchema, render: (_a, v) => renderStats(v) },
+      output: stringOut,
       async execute(args) {
         if (typeof args?.enabled === "boolean") state.enabled = args.enabled;
         if (args?.level === 1 || args?.level === 2 || args?.level === 3) state.level = args.level;
@@ -218,7 +165,7 @@ export function apply(ctx) {
           else if (sc === "on" || sc === "true" || sc === "1") state.stripComments = true;
           else state.stripComments = false;
         }
-        return snapshot();
+        return formatStats(snapshot());
       },
     }),
   );
@@ -312,6 +259,6 @@ export function apply(ctx) {
   }
   if (!stats.hookAttached && !warnedHook) {
     warnedHook = true;
-    console.warn("[dsh-local-saver] hook not attached; plugin idle. Check DSH tools/post-execute. local_saver_stats.hook_attached=false");
+    console.warn("[dsh-local-saver] hook not attached; plugin idle.");
   }
 }
