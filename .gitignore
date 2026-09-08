@@ -1,0 +1,9 @@
+node_modules/
+.dsh/
+.dsh-test/
+*.log
+.DS_Store
+coverage/
+.env
+.env.*
+local-saver-stats.json

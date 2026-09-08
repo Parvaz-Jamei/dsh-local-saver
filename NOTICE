@@ -1,0 +1,8 @@
+dsh-local-saver
+Copyright (c) 2026 Parvaz Jamei
+
+Token-output filters under rtk/ are a local port of the MIT-licensed
+RTK module in https://github.com/decolua/9router (open-sse/rtk).
+Copyright remains with the 9router / RTK authors for that ported code.
+
+This plugin does not proxy API requests and does not handle API keys.
