@@ -1,6 +1,6 @@
 {
   "name": "dsh-local-saver",
-  "version": "0.6.5",
+  "version": "0.6.6",
   "private": false,
   "description": "Local, key-safe tool-output compressor for DeepSeek Harness (dsh). No proxy, no network calls, no credential access.",
   "type": "module",
