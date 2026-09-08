@@ -25,7 +25,8 @@ test("putText keeps a text field when stdout+stderr present", () => {
   assert.match(joined, /out/);
   assert.match(joined, /err/);
   const back = putText(v, "compressed");
-  assert.equal(back.stderr, "");
+  assert.equal(back.stderr, "err");
+  assert.equal(back.stdout, "compressed");
   assert.equal(back.text, "compressed");
 });
 
