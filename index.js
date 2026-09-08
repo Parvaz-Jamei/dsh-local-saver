@@ -12,6 +12,7 @@ function snapshot() {
   return {
     enabled: state.enabled,
     level: state.level,
+    mode: state.mode,
     calls: stats.calls,
     chars_saved: stats.saved,
     last_tool: stats.lastTool || "-",
@@ -55,6 +56,7 @@ export function apply(ctx) {
           properties: {
             enabled: { type: "boolean", required: true },
             level: { type: "number", required: true },
+            mode: { type: "string", required: true },
             calls: { type: "number", required: true },
             chars_saved: { type: "number", required: true },
             last_tool: { type: "string", required: true },
@@ -64,7 +66,7 @@ export function apply(ctx) {
         render: (_args, value) => [
           {
             type: "text",
-            text: `local-saver enabled=${value.enabled} level=${value.level} calls=${value.calls} chars_saved=${value.chars_saved} last=${value.last_tool} filter=${value.last_filter}`,
+            text: `local-saver enabled=${value.enabled} level=${value.level} mode=${value.mode} calls=${value.calls} chars_saved=${value.chars_saved} last=${value.last_tool} filter=${value.last_filter}`,
           },
         ],
       },
@@ -78,7 +80,7 @@ export function apply(ctx) {
     defineTool({
       name: "local_saver_toggle",
       description:
-        "Enable/disable local tool-output compression or set level 1/2/3 for this session. Local only: does not read API keys and does not use the network.",
+        "Enable/disable local tool-output compression, set level 1/2/3, or set mode coding-safe|normal|aggressive for this session. Use coding-safe when editing source (keeps read_file and git diff raw). Local only.",
       parameters: {
         enabled: {
           type: "boolean",
@@ -88,6 +90,10 @@ export function apply(ctx) {
           type: "number",
           description: "Compression level 1 (no tree/git), 2 (+tree), or 3 (+git). Default 3.",
         },
+        mode: {
+          type: "string",
+          description: "coding-safe (default, keep source and diffs), normal, or aggressive.",
+        },
       },
       output: {
         schema: {
@@ -96,6 +102,7 @@ export function apply(ctx) {
           properties: {
             enabled: { type: "boolean", required: true },
             level: { type: "number", required: true },
+            mode: { type: "string", required: true },
             calls: { type: "number", required: true },
             chars_saved: { type: "number", required: true },
             last_tool: { type: "string", required: true },
@@ -105,7 +112,7 @@ export function apply(ctx) {
         render: (_args, value) => [
           {
             type: "text",
-            text: `local-saver now enabled=${value.enabled} level=${value.level}`,
+            text: `local-saver now enabled=${value.enabled} level=${value.level} mode=${value.mode}`,
           },
         ],
       },
@@ -113,6 +120,10 @@ export function apply(ctx) {
         if (typeof args?.enabled === "boolean") state.enabled = args.enabled;
         if (args?.level === 1 || args?.level === 2 || args?.level === 3) {
           state.level = args.level;
+        }
+        const mode = String(args?.mode ?? "").trim().toLowerCase();
+        if (mode === "coding-safe" || mode === "normal" || mode === "aggressive") {
+          state.mode = mode;
         }
         return snapshot();
       },
