@@ -1,6 +1,7 @@
 import { GIT_DIFF_HUNK_MAX_LINES } from "../constants.js";
 
-export function gitDiff(diff, maxLines = 500) {
+export function gitDiff(diff, maxLines = 500, opts = {}) {
+  const keepAll = opts.keepAll === true;
   const result = [];
   let currentFile = "";
   let added = 0;
@@ -9,10 +10,13 @@ export function gitDiff(diff, maxLines = 500) {
   let hunkShown = 0;
   let hunkSkipped = 0;
   let wasTruncated = false;
-  const maxHunkLines = GIT_DIFF_HUNK_MAX_LINES;
+  let skipBinary = false;
+  const maxHunkLines = keepAll ? Number.MAX_SAFE_INTEGER : GIT_DIFF_HUNK_MAX_LINES;
+  const cap = keepAll ? Number.MAX_SAFE_INTEGER : maxLines;
   const lines = diff.split("\n");
   outer: for (const line of lines) {
     if (line.startsWith("diff --git")) {
+      skipBinary = false;
       if (hunkSkipped > 0) {
         result.push(`  ... (${hunkSkipped} lines truncated)`);
         wasTruncated = true;
@@ -26,6 +30,12 @@ export function gitDiff(diff, maxLines = 500) {
       removed = 0;
       inHunk = false;
       hunkShown = 0;
+    } else if (/^Binary files |^GIT binary patch/.test(line)) {
+      result.push("  [binary omitted]");
+      skipBinary = true;
+      inHunk = false;
+    } else if (skipBinary) {
+      continue;
     } else if (line.startsWith("@@")) {
       if (hunkSkipped > 0) {
         result.push(`  ... (${hunkSkipped} lines truncated)`);
@@ -44,11 +54,13 @@ export function gitDiff(diff, maxLines = 500) {
         removed += 1;
         if (hunkShown < maxHunkLines) { result.push(`  ${line}`); hunkShown += 1; }
         else hunkSkipped += 1;
+      } else if (line.trim() === "") {
+        continue;
       } else if (hunkShown < maxHunkLines && !line.startsWith("\\")) {
         if (hunkShown > 0) { result.push(`  ${line}`); hunkShown += 1; }
       }
     }
-    if (result.length >= maxLines) {
+    if (result.length >= cap) {
       result.push("\n... (more changes truncated)");
       wasTruncated = true;
       break outer;
