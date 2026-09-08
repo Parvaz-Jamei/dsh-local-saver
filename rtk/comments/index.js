@@ -1,14 +1,30 @@
-import { detectLanguage } from "./detect.js";
+import { detectLanguage, languageFromPath, resolveFilePath, SUPPORTED_LANGUAGES } from "./detect.js";
 import { shouldKeepComment } from "./keep.js";
 import { findJsComments } from "./langs/javascript.js";
 import { findPythonComments } from "./langs/python.js";
-import { findCFamilyComments } from "./langs/cfamily.js";
 import { findHtmlComments } from "./langs/html.js";
 import { findShellComments } from "./langs/shell.js";
+import {
+  findJavaComments,
+  findCppComments,
+  findRustComments,
+  findKotlinComments,
+  findSwiftComments,
+  findCsharpComments,
+  findGoComments,
+  findCFamilyComments,
+} from "./langs/clike.js";
 
 const SCANNERS = {
   javascript: findJsComments,
   python: findPythonComments,
+  java: findJavaComments,
+  cpp: findCppComments,
+  rust: findRustComments,
+  kotlin: findKotlinComments,
+  swift: findSwiftComments,
+  csharp: findCsharpComments,
+  go: findGoComments,
   cfamily: findCFamilyComments,
   html: findHtmlComments,
   shell: findShellComments,
@@ -28,8 +44,14 @@ function splice(src, removals) {
   return out + src.slice(pos);
 }
 
-export function scanComments(text, toolName = "") {
-  const language = detectLanguage(text, toolName);
+function optionsOf(toolNameOrOpts) {
+  if (toolNameOrOpts && typeof toolNameOrOpts === "object") return toolNameOrOpts;
+  return { toolName: toolNameOrOpts || "" };
+}
+
+export function scanComments(text, toolNameOrOpts = "") {
+  const opts = optionsOf(toolNameOrOpts);
+  const language = detectLanguage(text, opts);
   if (!language || !SCANNERS[language]) {
     return { ok: false, reason: "unknown-language", language: language || null, comments: [] };
   }
@@ -41,7 +63,7 @@ export function scanComments(text, toolName = "") {
 export function stripSourceComments(text, options = {}) {
   const src = String(text ?? "");
   const preview = options.preview === true;
-  const scanned = scanComments(src, options.toolName || "");
+  const scanned = scanComments(src, options);
   const empty = {
     text: src,
     applied: false,
@@ -84,4 +106,4 @@ export function stripSourceComments(text, options = {}) {
   };
 }
 
-export { detectLanguage, shouldKeepComment };
+export { detectLanguage, shouldKeepComment, languageFromPath, resolveFilePath, SUPPORTED_LANGUAGES, SCANNERS };
