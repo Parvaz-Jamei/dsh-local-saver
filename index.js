@@ -1,10 +1,13 @@
-import { defineTool } from "@deepseek-ai/dsh-tools";
 import { createState, parseCaveman, parsePersist, shrink, resolveToolName, resolveFilePath } from "./saver-core.js";
 import { loadPersistedStats, savePersistedStats } from "./persist.js";
 import { estimateTokens } from "./rtk/tokens.js";
 
 export const name = "dsh-local-saver";
 export const inject = ["tools"];
+
+function defineTool(def) {
+  return def;
+}
 
 const stats = {
   calls: 0,
