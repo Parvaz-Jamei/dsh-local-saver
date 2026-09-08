@@ -19,6 +19,10 @@ import { tree } from "./filters/tree.js";
 import { smartTruncate } from "./filters/smartTruncate.js";
 import { readNumbered, READ_NUMBERED_LINE_RE } from "./filters/readNumbered.js";
 import { searchList, SEARCH_LIST_HEADER_RE } from "./filters/searchList.js";
+import { testRunner } from "./filters/testRunner.js";
+import { tableCols } from "./filters/tableCols.js";
+import { jsonCompact } from "./filters/jsonCompact.js";
+import { htmlMd } from "./filters/htmlMd.js";
 
 const RE_GIT_DIFF = /^diff --git /m;
 const RE_GIT_DIFF_HUNK = /^@@ /m;
@@ -26,6 +30,8 @@ const RE_GIT_STATUS = /^On branch |^nothing to commit|^Changes (not |to be )|^Un
 const RE_GIT_LOG = /^[*|/\\ ]*commit [0-9a-f]{7,40}$/m;
 const RE_PORCELAIN = /^[ MADRCU?!][ MADRCU?!] \S/m;
 const RE_BUILD_OUTPUT = /^(npm (warn|error|ERR!)|yarn (warn|error)|\[ERROR\]|BUILD (SUCCESS|FAILED)|ERROR:|Successfully (installed|built)|added \d+ package)|:\d+(?::\d+)?:\s+(?:fatal\s+)?error:|undefined reference|idf\.py|CMake Error/im;
+const RE_TEST = /===== test session|test result:|FAIL: |cargo test|Ran \d+ tests|npm test|go test|ok \d+    /i;
+const RE_TABLE = /CONTAINER ID|^NAME\s+READY\s+STATUS|^NAMESPACE\s+NAME/m;
 const RE_TREE_GLYPH = /[├└]──|│  /;
 const RE_LS_ROW = /^[-dlbcps][rwx-]{9}/m;
 const RE_LS_TOTAL = /^total \d+$/m;
@@ -37,6 +43,7 @@ export function autoDetectFilter(text, level = DEFAULT_LEVEL) {
   };
 
   const head = text.length > DETECT_WINDOW ? text.slice(0, DETECT_WINDOW) : text;
+  const trim = text.trim();
 
   if (RE_GIT_DIFF.test(head) || RE_GIT_DIFF.test(text.slice(0, 8000)) || RE_GIT_DIFF_HUNK.test(head)) {
     const hit = allowed(gitDiff);
@@ -50,8 +57,29 @@ export function autoDetectFilter(text, level = DEFAULT_LEVEL) {
     const hit = allowed(gitStatus);
     if (hit) return hit;
   }
+  if (RE_TEST.test(head) || RE_TEST.test(text.slice(0, 4000))) {
+    const hit = allowed(testRunner);
+    if (hit) return hit;
+  }
   if (RE_BUILD_OUTPUT.test(head) || RE_BUILD_OUTPUT.test(text.slice(0, 8000))) {
     const hit = allowed(buildOutput);
+    if (hit) return hit;
+  }
+  if (RE_TABLE.test(head)) {
+    const hit = allowed(tableCols);
+    if (hit) return hit;
+  }
+  if ((trim.startsWith("{") || trim.startsWith("[")) && trim.length > 40) {
+    try {
+      JSON.parse(trim);
+      const hit = allowed(jsonCompact);
+      if (hit) return hit;
+    } catch {
+      // not json
+    }
+  }
+  if (/<(html|div|p|span|article|h[1-3])[\s>]/i.test(head)) {
+    const hit = allowed(htmlMd);
     if (hit) return hit;
   }
   if (isMostlyPorcelain(head)) {
