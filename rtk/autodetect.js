@@ -28,13 +28,13 @@ const RE_GIT_DIFF = /^diff --git /m;
 const RE_GIT_DIFF_HUNK = /^@@ /m;
 const RE_GIT_STATUS = /^On branch |^nothing to commit|^Changes (not |to be )|^Untracked files:/m;
 const RE_GIT_LOG = /^[*|/\\ ]*commit [0-9a-f]{7,40}$/m;
-const RE_PORCELAIN = /^[ MADRCU?!][ MADRCU?!] \\S/m;
-const RE_BUILD_OUTPUT = /^(npm (warn|error|ERR!)|yarn (warn|error)|\\[ERROR\\]|BUILD (SUCCESS|FAILED)|ERROR:|Successfully (installed|built)|added \\d+ package)|:\\d+(?::\\d+)?:\\s+(?:fatal\\s+)?error:|undefined reference|idf\\.py|CMake Error/im;
-const RE_TEST = /===== test session|test result:|FAIL: |cargo test|Ran \\d+ tests|npm test|go test|ok \\d+    /i;
-const RE_TABLE = /CONTAINER ID|^NAME\\s+READY\\s+STATUS|^NAMESPACE\\s+NAME/m;
+const RE_PORCELAIN = /^[ MADRCU?!][ MADRCU?!] \S/m;
+const RE_BUILD_OUTPUT = /^(npm (warn|error|ERR!)|yarn (warn|error)|\[ERROR\]|BUILD (SUCCESS|FAILED)|ERROR:|Successfully (installed|built)|added \d+ package)|:\d+(?::\d+)?:\s+(?:fatal\s+)?error:|undefined reference|idf\.py|CMake Error/im;
+const RE_TEST = /===== test session|test result:|FAIL: |cargo test|Ran \d+ tests|npm test|go test|ok \d+    /i;
+const RE_TABLE = /CONTAINER ID|^NAME\s+READY\s+STATUS|^NAMESPACE\s+NAME/m;
 const RE_TREE_GLYPH = /[├└]──|│  /;
 const RE_LS_ROW = /^[-dlbcps][rwx-]{9}/m;
-const RE_LS_TOTAL = /^total \\d+$/m;
+const RE_LS_TOTAL = /^total \d+$/m;
 
 export function autoDetectFilter(text, level = DEFAULT_LEVEL) {
   const allowed = (fn) => {
@@ -72,7 +72,7 @@ export function autoDetectFilter(text, level = DEFAULT_LEVEL) {
     const hit = allowed(jsonCompact);
     if (hit) return hit;
   }
-  if (/<(html|div|p|span|article|h[1-3])[\\s>]/i.test(head)) {
+  if (/<(html|div|p|span|article|h[1-3])[\s>]/i.test(head)) {
     const hit = allowed(htmlMd);
     if (hit) return hit;
   }
@@ -81,7 +81,7 @@ export function autoDetectFilter(text, level = DEFAULT_LEVEL) {
     if (hit) return hit;
   }
 
-  const lines = head.split("\\n");
+  const lines = head.split("\n");
   const nonEmpty = lines.filter((l) => l.trim().length > 0);
   const first5 = nonEmpty.slice(0, 5);
   if (first5.some(isGrepLine)) {
@@ -112,7 +112,7 @@ export function autoDetectFilter(text, level = DEFAULT_LEVEL) {
     const hit = allowed(dedupLog);
     if (hit) return hit;
   }
-  if (text.split("\\n").length >= SMART_TRUNCATE_MIN_LINES) {
+  if (text.split("\n").length >= SMART_TRUNCATE_MIN_LINES) {
     const hit = allowed(smartTruncate);
     if (hit) return hit;
   }
@@ -132,7 +132,7 @@ function isPathLike(line) {
 }
 
 function isMostlyPorcelain(head) {
-  const lines = head.split("\\n").filter((l) => l.trim());
+  const lines = head.split("\n").filter((l) => l.trim());
   if (lines.length < 3) return false;
   const hits = lines.filter((l) => RE_PORCELAIN.test(l)).length;
   return hits / lines.length >= 0.6;
