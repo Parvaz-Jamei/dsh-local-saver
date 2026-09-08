@@ -1,10 +1,15 @@
-import { TREE_MAX_LINES } from "../constants.js";
+import { TREE_MAX_LINES, LS_NOISE_DIRS } from "../constants.js";
+
+function isNoiseLine(line) {
+  return LS_NOISE_DIRS.some((d) => !d.includes("*") && line.includes(d));
+}
 
 export function tree(input) {
   const lines = input.split("\n");
   if (lines.length === 0) return input;
   const filtered = [];
   for (const line of lines) {
+    if (isNoiseLine(line)) continue;
     if (line.includes("director") && line.includes("file")) continue;
     if (line.trim() === "" && filtered.length === 0) continue;
     filtered.push(line);

@@ -1,5 +1,6 @@
-/** Collapse extra blank lines only. Never drop unique source lines. */
-export function lightSource(input) {
+import { windowText } from "../hardCap.js";
+
+export function lightSource(input, opts = {}) {
   const lines = String(input).split("\n");
   const out = [];
   let blanks = 0;
@@ -12,7 +13,12 @@ export function lightSource(input) {
     blanks = 0;
     out.push(line);
   }
-  return out.join("\n");
+  let text = out.join("\n");
+  const maxKeep = opts.maxKeep ?? 400;
+  if (out.length > maxKeep) {
+    text = windowText(text, opts.head ?? 200, opts.tail ?? 80);
+  }
+  return text;
 }
 
 lightSource.filterName = "light-source";
