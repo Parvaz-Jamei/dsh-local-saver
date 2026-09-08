@@ -16,12 +16,32 @@ Token figures in `local_saver_stats` are **approx chars/4**.
 
 ## Strip comments (off by default)
 
-Per-language tokenizers — not a generic `//` regex. Strings, templates,
-regex literals and raw strings are left alone. Unknown language or a
-failed scan (unclosed string/comment) removes nothing.
+Per-language scanners, not a generic `//` regex. Default is **off**.
+Unknown, ambiguous, or unclosed structure → no deletion.
+
+Supported scanners only:
+
+- JavaScript / TypeScript (strings, templates, regex literals)
+- Python (strings, prefixes, docstrings)
+- Java (including text blocks `"""`)
+- C / C++ (including raw strings `R"delim(... )delim"`)
+- Rust (raw strings `r#"..."#`)
+- Kotlin / Swift multiline and raw strings
+- C# verbatim/raw strings, Go raw backticks
+- HTML/XML comments, shell `#`
+
+Not claimed: PHP, Ruby, Lua, SQL, Dart, Scala, Haskell, Elixir, etc.
+Those are a no-op.
+
+Language comes from the tool payload path/extension first, then shebang,
+then a single unambiguous content guess. A mention like `example.py`
+inside another file does not select Python.
 
 Kept: TODO FIXME XXX HACK WARNING NOTE BUG ~keep, JSDoc/Javadoc `/**`,
 `///` `//!`, Python docstrings, lint directives.
+
+Applies only to `read` / `read_file`. Never on `write`, `edit`,
+`apply_patch`, or git diffs.
 
 ```text
 Use local_saver_toggle with strip_comments preview
@@ -29,8 +49,7 @@ Use local_saver_stats
 Use local_saver_toggle with strip_comments on
 ```
 
-`preview` only reports `comments_seen` / `removed` / `kept`.
-Applies only to `read` / `read_file`. Git diffs are never stripped.
+`preview` reports `comments_seen` / `removed` / `kept` and does not rewrite.
 
 ## Install
 
@@ -54,6 +73,9 @@ dsh plugin --profile web add "github:Parvaz-Jamei/dsh-local-saver"
 ```bash
 node --test
 ```
+
+CI runs `node --test` on Ubuntu, Windows, and macOS:
+https://github.com/Parvaz-Jamei/dsh-local-saver/actions/workflows/test.yml
 
 ## License
 
