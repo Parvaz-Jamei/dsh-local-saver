@@ -130,17 +130,20 @@ export function apply(ctx) {
   }
 
   const statusLine = `local-saver ${state.enabled ? "ON" : "OFF"} mode=${state.mode} level=${state.level} strip_comments=${state.stripComments || "off"}. Compression may drop tool text. Tokens in stats are approx chars/4.`;
-  if (ctx.systemPrompt && typeof ctx.systemPrompt.section === "function") {
-    ctx.systemPrompt.section({ name: "local-saver-status", order: 40, text: statusLine });
-    if (parseCaveman()) {
-      ctx.systemPrompt.section({
-        name: "local-saver-terse",
-        order: 50,
-        text: "Terse. No preamble. No restating the question. Prefer offsets/limits on read. Do not dump whole files. Keep exact code, paths, error lines.",
-      });
+  try {
+    const section = ctx.systemPrompt && ctx.systemPrompt.section;
+    if (typeof section === "function") {
+      section.call(ctx.systemPrompt, { name: "local-saver-status", order: 40, text: statusLine });
+      if (parseCaveman()) {
+        section.call(ctx.systemPrompt, {
+          name: "local-saver-terse",
+          order: 50,
+          text: "Terse. No preamble. No restating the question. Prefer offsets/limits on read. Do not dump whole files. Keep exact code, paths, error lines.",
+        });
+      }
     }
-  } else if (state.enabled) {
-    console.warn(`[dsh-local-saver] ${statusLine}`);
+  } catch {
+    // Cordis forbids ctx.systemPrompt unless inject lists it. Tools still work.
   }
 
   ctx.tools.register(
