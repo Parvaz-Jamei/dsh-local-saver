@@ -7,7 +7,7 @@ export function dedupLog(input) {
   let runCount = 0;
   let blankStreak = 0;
   const flushRun = () => {
-    if (prev !== null && runCount > 1) out.push(`  ... (${runCount - 1} duplicate lines`);
+    if (prev !== null && runCount > 1) out.push(`  ... (${runCount - 1} duplicate lines)`);
   };
   for (const line of lines) {
     if (line.trim() === "") {

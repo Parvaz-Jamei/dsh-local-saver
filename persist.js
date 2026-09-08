@@ -10,14 +10,14 @@ export async function loadPersistedStats(fsApi = { readFile }) {
   try {
     const raw = await fsApi.readFile(statsFilePath(), "utf8");
     const data = JSON.parse(raw);
-    const calls = Number(data.calls);
-    const saved = Number(data.saved);
     return {
-      calls: Number.isFinite(calls) ? calls : 0,
-      saved: Number.isFinite(saved) ? saved : 0,
+      calls: Number(data.calls) || 0,
+      saved: Number(data.saved) || 0,
+      charsBefore: Number(data.charsBefore) || 0,
+      charsAfter: Number(data.charsAfter) || 0,
     };
   } catch {
-    return { calls: 0, saved: 0 };
+    return { calls: 0, saved: 0, charsBefore: 0, charsAfter: 0 };
   }
 }
 
@@ -27,6 +27,8 @@ export async function savePersistedStats(stats, fsApi = { mkdir, writeFile }) {
   const payload = JSON.stringify({
     calls: Number(stats.calls) || 0,
     saved: Number(stats.saved) || 0,
+    charsBefore: Number(stats.charsBefore) || 0,
+    charsAfter: Number(stats.charsAfter) || 0,
   });
   await fsApi.writeFile(statsFilePath(), payload, "utf8");
 }

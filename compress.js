@@ -30,10 +30,17 @@ export function putText(value, text) {
   if (Array.isArray(value)) return [{ type: "text", text }];
   if (value && typeof value === "object") {
     const next = { ...value };
+    if (typeof next.stdout === "string" && typeof next.stderr === "string") {
+      next.stdout = text;
+      next.stderr = "";
+      next.text = text;
+      return next;
+    }
     if ("text" in next && typeof next.text === "string") next.text = text;
     else if ("output" in next && typeof next.output === "string") next.output = text;
     else if ("stdout" in next) next.stdout = text;
     else if (Array.isArray(next.content)) next.content = [{ type: "text", text }];
+    else next.text = text;
     return next;
   }
   return text;
