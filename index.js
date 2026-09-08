@@ -113,13 +113,6 @@ export function apply(ctx) {
         order: 40,
         text: `local-saver ${state.enabled ? "ON" : "OFF"} mode=${state.mode} level=${state.level} strip_comments=${stripLabel()}. Compression may drop tool text.`,
       });
-      if (parseCaveman()) {
-        section.call(ctx.systemPrompt, {
-          name: "local-saver-terse",
-          order: 50,
-          text: "Terse. No preamble. Prefer offsets/limits on read. Keep exact code, paths, error lines.",
-        });
-      }
     }
   } catch {
     // ignore missing systemPrompt inject
@@ -129,7 +122,9 @@ export function apply(ctx) {
     defineTool({
       name: "local_saver_stats",
       description: "Show dsh-local-saver stats. Token counts are approx (chars/4), not provider usage. Local only.",
-      parameters: {},
+      parameters: {
+        unused: { type: "string", description: "Ignored. Present so the API schema is a JSON object." },
+      },
       output: stringOut,
       async execute() {
         return formatStats(snapshot());
