@@ -31,13 +31,19 @@ let persistTimer = null;
 let warnedHook = false;
 const seenIds = new Set();
 
+function stripLabel() {
+  if (state.stripComments === "preview") return "preview";
+  if (state.stripComments) return "on";
+  return "off";
+}
+
 function snapshot() {
   return {
     enabled: state.enabled,
     level: state.level,
     mode: state.mode,
     dry_run: !!state.dryRun,
-    strip_comments: state.stripComments === "preview" ? "preview" : !!state.stripComments,
+    strip_comments: stripLabel(),
     processed_calls: stats.processed,
     compressed_calls: stats.compressed,
     calls: stats.compressed,
@@ -72,31 +78,57 @@ function persistDebounced() {
 const statsSchema = {
   type: "object",
   additionalProperties: false,
+  required: [
+    "enabled",
+    "level",
+    "mode",
+    "dry_run",
+    "strip_comments",
+    "processed_calls",
+    "compressed_calls",
+    "calls",
+    "chars_before",
+    "chars_after",
+    "chars_saved",
+    "tokens_before",
+    "tokens_after",
+    "tokens_saved",
+    "last_tool",
+    "last_filter",
+    "last_kind",
+    "comments_language",
+    "comments_seen",
+    "comments_removed",
+    "comments_kept",
+    "hook_attached",
+    "hook_event",
+    "tokens_note",
+  ],
   properties: {
-    enabled: { type: "boolean", required: true },
-    level: { type: "number", required: true },
-    mode: { type: "string", required: true },
-    dry_run: { type: "boolean", required: true },
-    strip_comments: { type: ["boolean", "string"], required: true },
-    processed_calls: { type: "number", required: true },
-    compressed_calls: { type: "number", required: true },
-    calls: { type: "number", required: true },
-    chars_before: { type: "number", required: true },
-    chars_after: { type: "number", required: true },
-    chars_saved: { type: "number", required: true },
-    tokens_before: { type: "number", required: true },
-    tokens_after: { type: "number", required: true },
-    tokens_saved: { type: "number", required: true },
-    last_tool: { type: "string", required: true },
-    last_filter: { type: "string", required: true },
-    last_kind: { type: "string", required: true },
-    comments_language: { type: "string", required: true },
-    comments_seen: { type: "number", required: true },
-    comments_removed: { type: "number", required: true },
-    comments_kept: { type: "number", required: true },
-    hook_attached: { type: "boolean", required: true },
-    hook_event: { type: "string", required: true },
-    tokens_note: { type: "string", required: true },
+    enabled: { type: "boolean" },
+    level: { type: "number" },
+    mode: { type: "string" },
+    dry_run: { type: "boolean" },
+    strip_comments: { type: "string" },
+    processed_calls: { type: "number" },
+    compressed_calls: { type: "number" },
+    calls: { type: "number" },
+    chars_before: { type: "number" },
+    chars_after: { type: "number" },
+    chars_saved: { type: "number" },
+    tokens_before: { type: "number" },
+    tokens_after: { type: "number" },
+    tokens_saved: { type: "number" },
+    last_tool: { type: "string" },
+    last_filter: { type: "string" },
+    last_kind: { type: "string" },
+    comments_language: { type: "string" },
+    comments_seen: { type: "number" },
+    comments_removed: { type: "number" },
+    comments_kept: { type: "number" },
+    hook_attached: { type: "boolean" },
+    hook_event: { type: "string" },
+    tokens_note: { type: "string" },
   },
 };
 
@@ -129,7 +161,7 @@ export function apply(ctx) {
       .catch(() => {});
   }
 
-  const statusLine = `local-saver ${state.enabled ? "ON" : "OFF"} mode=${state.mode} level=${state.level} strip_comments=${state.stripComments || "off"}. Compression may drop tool text. Tokens in stats are approx chars/4.`;
+  const statusLine = `local-saver ${state.enabled ? "ON" : "OFF"} mode=${state.mode} level=${state.level} strip_comments=${stripLabel()}. Compression may drop tool text. Tokens in stats are approx chars/4.`;
   try {
     const section = ctx.systemPrompt && ctx.systemPrompt.section;
     if (typeof section === "function") {
