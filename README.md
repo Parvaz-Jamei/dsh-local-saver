@@ -11,47 +11,47 @@ by, or sponsored by DeepSeek or 9Router. 'DeepSeek' is a trademark of
 its respective owner. Filter logic under rtk/ is a compatible
 re-implementation ported under 9Router's MIT license — see NOTICE.
 
-Local DeepSeek Harness plugin. It compresses long tool output before that text is sent back to the model.
+**Compression is lossy.** Filters drop repeated lines, listings, and
+log noise. `aggressive` can drop source and diff hunks. Do not treat
+stats as proof that answer quality is unchanged. For sensitive edits
+stay on `coding-safe` or set `DSH_LOCAL_SAVER=off`.
 
-This is a host-side interceptor. It does not read `~/.dsh/.credentials.yaml`, does not open sockets, and does not sit in front of `api.deepseek.com`. It does not rewrite files on disk.
+Token figures in `local_saver_stats` are **approx chars/4**, not the
+provider tokenizer and not billed usage. Persian, code, and JSON will
+not match that ratio.
 
 ## What it does
 
-Hooks `tools/post-execute` for `bash` / `pwsh` / `grep` / `read` / `read_file` / `exec` / `run_code` and runs autodetect + compact:
+Host-side interceptor on `tools/post-execute` (fallback:
+`tool/post-execute`, `tools.after` — only one event is attached).
+It does not read `~/.dsh/.credentials.yaml`, does not open sockets,
+and does not sit in front of `api.deepseek.com`. It does not rewrite
+files on disk.
 
-- git-diff / git-status / git-log
-- grep / find / ls / tree
-- build-output (npm, cargo, gcc/clang, idf.py, make, ninja)
-- dedup-log / smart-truncate / read-numbered / search-list
-
-Windows grep paths (`C:\\...:12:line`) are parsed correctly. Error blobs and outputs under 500 characters pass through unchanged.
+If the hook is missing, `local_saver_stats` shows `hook_attached=false`
+and a warning is printed. The plugin then does nothing.
 
 ## Modes
 
-Default is `coding-safe` (embedded / source editing):
+Default is `coding-safe`:
 
 | Mode | Behavior |
 |---|---|
-| `coding-safe` | Do not compress `read` / `read_file`. Do not compress git-diff / git-status / git-log. Still compact grep, ls, find, and build logs. Keep gcc/idf error lines. |
-| `normal` | Compress listings and build logs. Git filters follow `level`. |
-| `aggressive` | Same filters as `normal` at the current level (full RTK set at level 3). |
-
-Change mode in the chat (the model calls the built-in tool):
+| `coding-safe` | Keep source lines and diff hunks. Compact grep, ls, find, build logs. |
+| `balanced` (`normal`) | Compress listings and build logs. Git follows `level`. |
+| `aggressive` | Full RTK set at the current level. Highest risk of dropped context. |
 
 ```text
 Use local_saver_toggle with mode coding-safe
 Use local_saver_toggle with mode aggressive and level 3
+Use local_saver_toggle with dry_run true
 Use local_saver_stats
 ```
 
-A first-party Settings → Plugins card needs a separate dsh.client React bundle. This package stays host-only so it cannot steal keys and does not require a client build. Control is env + tools, which work next to Settings → Models without a UI card.
+`dry_run` measures savings but leaves tool output unchanged.
 
-## Platform support
-
-Tested on Linux and macOS (POSIX paths, `~/.dsh`) and Windows
-(drive-letter paths, `C:\...`). `$DSH_HOME` / `$HOME` resolution uses
-Node's `os.homedir()`, which is cross-platform. No shell-specific
-syntax is used anywhere in the plugin.
+There is no Settings React card (host-only on purpose). Status is the
+system-prompt line + `local_saver_stats`.
 
 ## Install
 
@@ -59,42 +59,38 @@ syntax is used anywhere in the plugin.
 dsh plugin --profile web add "github:Parvaz-Jamei/dsh-local-saver"
 ```
 
-Restart the harness. Keep the DeepSeek key on Settings → Models.
+Restart the harness.
 
 ## Env
 
 | Variable | Values | Default |
 |---|---|---|
-| `DSH_LOCAL_SAVER` | `off` / `0` / `false` | on |
+| `DSH_LOCAL_SAVER` | `off` / `0` / `false` | **on** |
 | `DSH_LOCAL_SAVER_LEVEL` | `1` `2` `3` | `3` |
-| `DSH_LOCAL_SAVER_MODE` | `coding-safe` `normal` `aggressive` | `coding-safe` |
+| `DSH_LOCAL_SAVER_MODE` | `coding-safe` `balanced`/`normal` `aggressive` | `coding-safe` |
 | `DSH_LOCAL_SAVER_PERSIST` | `1` | off |
 | `DSH_LOCAL_SAVER_CAVEMAN` | `1` | off |
+| `DSH_LOCAL_SAVER_DRY_RUN` | `1` | off |
+| `DSH_LOCAL_SAVER_STRIP_ANSI` | `0` / `off` | on for logs; skipped on coding-safe source |
+| `DSH_SESSION` / `DSH_WORKSPACE` | any string | cache key scope (else `cwd`) |
 
-## Levels
+Default stays **on** because the plugin exists to cut tool tokens.
+Turn it off if you need raw output.
 
-- 1 — grep, find, ls, dedup-log, smart-truncate, read-numbered, search-list, build-output
-- 2 — + tree
-- 3 — + git-diff, git-status, git-log (skipped when mode is coding-safe)
+## Compatibility
 
-## Tools
-
-- `local_saver_stats` — enabled, level, mode, calls, chars_saved, last tool/filter
-- `local_saver_toggle` — `enabled`, `level`, `mode` for this process
-
-## Persist
-
-Off unless `DSH_LOCAL_SAVER_PERSIST=1`. Then only `{"calls":N,"saved":N}` is written to `$DSH_HOME/local-saver-stats.json`. Tool text is never stored.
-
-## Caveman
-
-`DSH_LOCAL_SAVER_CAVEMAN=1` registers a short terse section when `ctx.systemPrompt.section()` exists. If the harness does not expose that method, the flag is a no-op.
+Peer range is `@deepseek-ai/cordis` and `@deepseek-ai/dsh-tools`
+`>=0.1.0-0` (developer-preview APIs move). Unit tests do not boot a
+full DSH process. Re-verify the hook after a harness upgrade.
 
 ## Tests
 
 ```bash
-node --test test/*.test.js
+node --test
 ```
+
+Includes unit filters, review regressions, and a small lossy benchmark
+fixture (`test/bench.test.js`). That bench is not a quality claim.
 
 ## Author
 
@@ -105,8 +101,7 @@ Embedded software — industrial IoT and edge AI
 ## Acknowledgments
 
 rtk/ filter logic: ported from 9Router (github.com/decolua/9router),
-MIT licensed. This project is not a fork and does not include
-9Router's gateway, provider routing, or key storage.
+MIT licensed.
 
 ## License
 
