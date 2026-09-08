@@ -8,6 +8,7 @@ import { jsonCompact, looksLikeJson } from "./rtk/filters/jsonCompact.js";
 import { tokenReport } from "./rtk/tokens.js";
 import { stripAnsi } from "./rtk/stripAnsi.js";
 import { hardCapChars, windowText } from "./rtk/hardCap.js";
+import { stripSourceComments } from "./rtk/comments/index.js";
 
 export const TARGETS = new Set([
   "bash", "pwsh", "grep", "read", "read_file", "exec", "run_code",
@@ -56,6 +57,13 @@ export function parseStripAnsi(env = process.env) {
   return true;
 }
 
+export function parseStripComments(env = process.env) {
+  const raw = String(env.DSH_LOCAL_SAVER_STRIP_COMMENTS ?? "").trim().toLowerCase();
+  if (raw === "preview" || raw === "dry" || raw === "dry-run") return "preview";
+  if (raw === "1" || raw === "on" || raw === "true") return true;
+  return false;
+}
+
 export function parseMode(env = process.env) {
   const raw = String(env.DSH_LOCAL_SAVER_MODE ?? "coding-safe").trim().toLowerCase();
   if (raw === "normal" || raw === "balanced") return "balanced";
@@ -74,6 +82,7 @@ export function createState(env = process.env) {
     mode: parseMode(env),
     dryRun: parseDryRun(env),
     stripAnsi: parseStripAnsi(env),
+    stripComments: parseStripComments(env),
     scope: cacheScope(env),
   };
 }
@@ -82,8 +91,8 @@ export function contentHash(text) {
   return createHash("sha256").update(String(text)).digest("hex");
 }
 
-export function cacheKey(tool, text, scope = cacheScope()) {
-  return `${scope}|${tool || "-"}|${contentHash(text)}`;
+export function cacheKey(tool, text, scope = cacheScope(), extra = "") {
+  return `${scope}|${tool || "-"}|${extra}|${contentHash(text)}`;
 }
 
 export function resolveToolName(payload, out) {
@@ -148,7 +157,7 @@ export function shrink(toolName, value, state = { enabled: true, level: DEFAULT_
   const mode = state.mode || "coding-safe";
   const kind = classify(toolName, raw);
   const before = raw.length;
-  const key = cacheKey(toolName, raw, state.scope);
+  const key = cacheKey(toolName, raw, state.scope, String(state.stripComments || ""));
   if (cache.has(key)) {
     const digest = windowText(raw, 12, 8, `[repeat of ${toolName || "tool"} output, 0 new bytes]`);
     const outVal = state.dryRun ? value : putText(value, digest);
@@ -180,12 +189,33 @@ export function shrink(toolName, value, state = { enabled: true, level: DEFAULT_
   }
   text = keepErrors(raw, text);
 
+  let commentMeta = null;
+  const stripMode = state.stripComments;
+  const allowStrip = stripMode && kind !== "git-diff" && (kind === "source" || SOURCE_TOOLS.has(String(toolName)));
+  if (allowStrip) {
+    const preview = stripMode === "preview" || !!state.dryRun;
+    const cut = stripSourceComments(text, { preview, toolName });
+    commentMeta = {
+      comments_language: cut.language,
+      comments_seen: cut.comments_seen,
+      comments_removed: cut.comments_removed,
+      comments_kept: cut.comments_kept,
+      comments_preview: cut.preview,
+    };
+    if (cut.applied) {
+      text = cut.text;
+      filter = filter ? `${filter}+strip-comments` : "strip-comments";
+    } else if (cut.preview && cut.comments_removed > 0) {
+      filter = filter ? `${filter}+comments-preview` : "comments-preview";
+    }
+  }
+
   cache.set(key, true);
   if (cache.size > 64) cache.delete(cache.keys().next().value);
 
-  if (state.dryRun) return done(value, before, Math.min(text.length, before), `${filter || "none"}+dry-run`, kind);
-  if (text.length >= before) return done(value, before, before, filter, kind);
-  return done(putText(value, text), before, text.length, filter, kind);
+  if (state.dryRun) return done(value, before, Math.min(text.length, before), `${filter || "none"}+dry-run`, kind, commentMeta || {});
+  if (text.length >= before) return done(value, before, before, filter, kind, commentMeta || {});
+  return done(putText(value, text), before, text.length, filter, kind, commentMeta || {});
 }
 
 export function resetCache() {
