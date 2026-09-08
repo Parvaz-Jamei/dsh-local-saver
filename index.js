@@ -1,5 +1,5 @@
 import { defineTool } from "@deepseek-ai/dsh-tools";
-import { createState, parseCaveman, parsePersist, shrink, resolveToolName } from "./saver-core.js";
+import { createState, parseCaveman, parsePersist, shrink, resolveToolName, resolveFilePath } from "./saver-core.js";
 import { loadPersistedStats, savePersistedStats } from "./persist.js";
 import { estimateTokens } from "./rtk/tokens.js";
 
@@ -199,8 +199,10 @@ export function apply(ctx) {
         if (seenIds.size > 256) seenIds.delete(seenIds.values().next().value);
       }
       const toolName = resolveToolName(payload, out);
+      const filePath = resolveFilePath(payload, out);
+      const localState = filePath ? { ...state, filePath } : state;
       if (typeof out === "string") {
-        const result = shrink(toolName, out, state);
+        const result = shrink(toolName, out, localState);
         record(result, toolName || "string");
         return result.saved > 0 && !state.dryRun ? result.value : out;
       }
@@ -215,7 +217,7 @@ export function apply(ctx) {
                 : null
           : null;
       if (!slot) return out;
-      const result = shrink(toolName, out[slot], state);
+      const result = shrink(toolName, out[slot], localState);
       record(result, toolName || slot);
       if (result.saved > 0 && !state.dryRun) return { ...out, [slot]: result.value };
     } catch {
