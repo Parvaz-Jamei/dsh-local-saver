@@ -19,4 +19,4 @@ jobs:
         with:
           node-version: "20"
       - name: Unit tests
-        run: node --test test
+        run: node --test
