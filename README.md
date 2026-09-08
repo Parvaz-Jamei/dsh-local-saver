@@ -4,11 +4,16 @@
 [![Node.js](https://img.shields.io/badge/node-%3E%3D20-339933?logo=node.js)](https://nodejs.org/)
 [![test](https://github.com/Parvaz-Jamei/dsh-local-saver/actions/workflows/test.yml/badge.svg)](https://github.com/Parvaz-Jamei/dsh-local-saver/actions/workflows/test.yml)
 
-Independent utility. Not affiliated with, endorsed by, or sponsored by DeepSeek or 9Router. DeepSeek is a trademark of its owner. Filter logic under `rtk/` is an MIT-licensed port — see NOTICE.
+## Disclaimer
+
+Independent, community-built utility. Not affiliated with, endorsed
+by, or sponsored by DeepSeek or 9Router. 'DeepSeek' is a trademark of
+its respective owner. Filter logic under rtk/ is a compatible
+re-implementation ported under 9Router's MIT license — see NOTICE.
 
 Local DeepSeek Harness plugin. It compresses long tool output before that text is sent back to the model.
 
-Host-side interceptor. It does not read `~/.dsh/.credentials.yaml`, does not open sockets, and does not sit in front of `api.deepseek.com`.
+This is a host-side interceptor. It does not read `~/.dsh/.credentials.yaml`, does not open sockets, and does not sit in front of `api.deepseek.com`.
 
 ## What it does
 
@@ -22,6 +27,13 @@ Hooks `tools/post-execute` for `bash` / `pwsh` / `grep` / `read` / `read_file` /
 Windows grep paths (`C:\\...:12:line`) are parsed correctly. Error blobs and outputs under 500 characters pass through unchanged.
 
 Use `docs/AGENTS.md` for peak/off-peak scheduling and model routing. This plugin handles tool-output size.
+
+## Platform support
+
+Tested on Linux and macOS (POSIX paths, `~/.dsh`) and Windows
+(drive-letter paths, `C:\...`). `$DSH_HOME` / `$HOME` resolution uses
+Node's `os.homedir()`, which is cross-platform. No shell-specific
+syntax is used anywhere in the plugin.
 
 ## Install
 
@@ -75,7 +87,9 @@ Embedded software — industrial IoT and edge AI
 
 ## Acknowledgments
 
-rtk/ filter logic: ported from 9Router (github.com/decolua/9router), MIT licensed. This project is not a fork and does not include 9Router's gateway, provider routing, or key storage.
+rtk/ filter logic: ported from 9Router (github.com/decolua/9router),
+MIT licensed. This project is not a fork and does not include
+9Router's gateway, provider routing, or key storage.
 
 ## License
 

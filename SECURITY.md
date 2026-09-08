@@ -1,8 +1,6 @@
 # Security
 
-This plugin is designed to stay off the network path of the model provider.
-
-It does **not**:
+This plugin does not:
 
 - read `$DSH_HOME/.credentials.yaml` or any other credential store
 - send requests to `api.deepseek.com` or any other host
