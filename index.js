@@ -16,6 +16,10 @@ const stats = {
   lastTool: "",
   lastFilter: "",
   lastKind: "",
+  lastCommentsSeen: 0,
+  lastCommentsRemoved: 0,
+  lastCommentsKept: 0,
+  lastCommentsLang: "",
   hookAttached: false,
   hookEvent: "",
 };
@@ -30,6 +34,7 @@ function snapshot() {
     level: state.level,
     mode: state.mode,
     dry_run: !!state.dryRun,
+    strip_comments: state.stripComments === "preview" ? "preview" : !!state.stripComments,
     processed_calls: stats.processed,
     compressed_calls: stats.compressed,
     calls: stats.compressed,
@@ -42,6 +47,10 @@ function snapshot() {
     last_tool: stats.lastTool || "-",
     last_filter: stats.lastFilter || "-",
     last_kind: stats.lastKind || "-",
+    comments_language: stats.lastCommentsLang || "-",
+    comments_seen: stats.lastCommentsSeen,
+    comments_removed: stats.lastCommentsRemoved,
+    comments_kept: stats.lastCommentsKept,
     hook_attached: stats.hookAttached,
     hook_event: stats.hookEvent || "-",
     tokens_note: "approx chars/4 — not a provider tokenizer",
@@ -65,6 +74,7 @@ const statsSchema = {
     level: { type: "number", required: true },
     mode: { type: "string", required: true },
     dry_run: { type: "boolean", required: true },
+    strip_comments: { type: ["boolean", "string"], required: true },
     processed_calls: { type: "number", required: true },
     compressed_calls: { type: "number", required: true },
     calls: { type: "number", required: true },
@@ -77,6 +87,10 @@ const statsSchema = {
     last_tool: { type: "string", required: true },
     last_filter: { type: "string", required: true },
     last_kind: { type: "string", required: true },
+    comments_language: { type: "string", required: true },
+    comments_seen: { type: "number", required: true },
+    comments_removed: { type: "number", required: true },
+    comments_kept: { type: "number", required: true },
     hook_attached: { type: "boolean", required: true },
     hook_event: { type: "string", required: true },
     tokens_note: { type: "string", required: true },
@@ -88,8 +102,9 @@ function renderStats(value) {
     {
       type: "text",
       text:
-        `local-saver enabled=${value.enabled} level=${value.level} mode=${value.mode} dry_run=${value.dry_run} hook=${value.hook_attached} event=${value.hook_event}\n` +
+        `local-saver enabled=${value.enabled} level=${value.level} mode=${value.mode} dry_run=${value.dry_run} strip_comments=${value.strip_comments} hook=${value.hook_attached} event=${value.hook_event}\n` +
         `processed=${value.processed_calls} compressed=${value.compressed_calls}\n` +
+        `comments lang=${value.comments_language} seen=${value.comments_seen} removed=${value.comments_removed} kept=${value.comments_kept}\n` +
         `Before: ${value.chars_before} chars (~${value.tokens_before} tokens approx chars/4)\n` +
         `After: ${value.chars_after} chars (~${value.tokens_after} tokens approx chars/4)\n` +
         `Saved: ${value.chars_saved} chars (~${value.tokens_saved} tokens approx chars/4)\n` +
@@ -111,7 +126,7 @@ export function apply(ctx) {
       .catch(() => {});
   }
 
-  const statusLine = `local-saver ${state.enabled ? "ON" : "OFF"} mode=${state.mode} level=${state.level}. Compression may drop tool text. Tokens in stats are approx chars/4.`;
+  const statusLine = `local-saver ${state.enabled ? "ON" : "OFF"} mode=${state.mode} level=${state.level} strip_comments=${state.stripComments || "off"}. Compression may drop tool text. Tokens in stats are approx chars/4.`;
   if (ctx.systemPrompt && typeof ctx.systemPrompt.section === "function") {
     ctx.systemPrompt.section({ name: "local-saver-status", order: 40, text: statusLine });
     if (parseCaveman()) {
@@ -140,12 +155,16 @@ export function apply(ctx) {
   ctx.tools.register(
     defineTool({
       name: "local_saver_toggle",
-      description: "Set enabled, level 1-3, mode coding-safe|balanced|aggressive, or dry_run. Alias: normal=balanced. Local only.",
+      description: "Set enabled, level 1-3, mode, dry_run, or strip_comments off|preview|on. Local only.",
       parameters: {
         enabled: { type: "boolean", description: "true = compress, false = raw." },
         level: { type: "number", description: "1 listings, 2 +tree, 3 +git." },
         mode: { type: "string", description: "coding-safe, balanced, or aggressive." },
         dry_run: { type: "boolean", description: "true = measure only, do not rewrite tool output." },
+        strip_comments: {
+          type: "string",
+          description: "off | preview | on. Default off. preview reports counts without deleting.",
+        },
       },
       output: { schema: statsSchema, render: (_a, v) => renderStats(v) },
       async execute(args) {
@@ -155,6 +174,12 @@ export function apply(ctx) {
         if (mode === "coding-safe" || mode === "aggressive") state.mode = mode;
         if (mode === "balanced" || mode === "normal") state.mode = "balanced";
         if (typeof args?.dry_run === "boolean") state.dryRun = args.dry_run;
+        if (args?.strip_comments != null) {
+          const sc = String(args.strip_comments).trim().toLowerCase();
+          if (sc === "preview" || sc === "dry") state.stripComments = "preview";
+          else if (sc === "on" || sc === "true" || sc === "1") state.stripComments = true;
+          else state.stripComments = false;
+        }
         return snapshot();
       },
     }),
@@ -205,6 +230,12 @@ export function apply(ctx) {
       stats.lastTool = String(toolName || "");
       stats.lastFilter = String(result.filter || "");
       stats.lastKind = String(result.kind || "");
+      if (result.comments_seen != null) {
+        stats.lastCommentsSeen = result.comments_seen;
+        stats.lastCommentsRemoved = result.comments_removed || 0;
+        stats.lastCommentsKept = result.comments_kept || 0;
+        stats.lastCommentsLang = result.comments_language || "";
+      }
     }
     if (result.saved > 0) {
       stats.calls += 1;
