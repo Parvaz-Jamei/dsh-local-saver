@@ -1,6 +1,8 @@
 import { test, mock } from "node:test";
 import assert from "node:assert/strict";
-import { loadPersistedStats, savePersistedStats } from "../persist.js";
+import { loadPersistedStats, savePersistedStats, statsFilePath } from "../persist.js";
+import { homedir } from "node:os";
+import { join } from "node:path";
 
 function parsePersist(env = {}) {
   return String(env.DSH_LOCAL_SAVER_PERSIST ?? "").trim() === "1";
@@ -39,4 +41,12 @@ test("plugin persist gate: no fs when PERSIST!=1", () => {
   if (!parsePersist({ DSH_LOCAL_SAVER_PERSIST: undefined })) {
     assert.equal(readFile.mock.calls.length, 0);
   }
+});
+
+test("statsFilePath uses os.homedir and path.join", () => {
+  const p = statsFilePath();
+  assert.ok(p.includes("local-saver-stats.json"));
+  assert.ok(p.startsWith(join(homedir(), ".dsh")) || p.includes(".dsh"));
+  assert.equal(statsFilePath("/home/me/.dsh"), join("/home/me/.dsh", "local-saver-stats.json"));
+  assert.equal(statsFilePath("/Users/me/.dsh"), join("/Users/me/.dsh", "local-saver-stats.json"));
 });

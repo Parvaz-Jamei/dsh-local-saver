@@ -18,14 +18,20 @@ function unixGrepBlock() {
   for (let n = 1; n <= 20; n++) lines.push(`/home/me/project/src/index.js:${n}: const v${n} = ${n};`);
   return pad(lines.join("\n"));
 }
+function macGrepBlock() {
+  const lines = [];
+  for (let n = 1; n <= 20; n++) lines.push(`/Users/me/project/src/index.js:${n}: const v${n} = ${n};`);
+  return pad(lines.join("\n"));
+}
 function gitDiffBlock() {
   const lines = ["diff --git a/a.js b/a.js", "index 111..222 100644", "--- a/a.js", "+++ b/a.js", "@@ -1,200 +1,200 @@"];
   for (let i = 0; i < 220; i++) lines.push(i % 2 ? `+added line ${i} extra payload padding` : `-removed line ${i} extra payload padding`);
   return pad(lines.join("\n"));
 }
 
-test("isGrepLine accepts unix and windows paths", () => {
+test("isGrepLine accepts linux, macos, and windows paths", () => {
   assert.equal(isGrepLine("/home/me/src/a.js:10: foo"), true);
+  assert.equal(isGrepLine("/Users/me/src/a.js:10: foo"), true);
   assert.equal(isGrepLine("C:\\Users\\me\\project\\src\\index.js:10: content"), true);
   assert.equal(isGrepLine("C:/Users/me/project/src/index.js:10: content"), true);
   assert.equal(isGrepLine("not-grep"), false);
@@ -41,8 +47,16 @@ test("windows grep block detects grep and shrinks", () => {
   assert.match(out.text, /matches in/);
 });
 
-test("unix grep block detects grep and shrinks", () => {
+test("linux grep block detects grep and shrinks", () => {
   const raw = unixGrepBlock();
+  assert.equal(autoDetectFilter(raw, 3)?.filterName, "grep");
+  const out = compressToolText(raw, 3);
+  assert.equal(out.filter, "grep");
+  assert.ok(out.saved > 0);
+});
+
+test("macos grep block detects grep and shrinks", () => {
+  const raw = macGrepBlock();
   assert.equal(autoDetectFilter(raw, 3)?.filterName, "grep");
   const out = compressToolText(raw, 3);
   assert.equal(out.filter, "grep");
