@@ -1,5 +1,10 @@
 const RE_CARGO_ERR_CONT = /^\s*(-->|\||\d+\s*\||=)/;
 const DEPRECATION_KEEP = 3;
+const RE_GCC_DIAG = /:\d+(?::\d+)?:\s+(?:fatal\s+)?(?:error|warning|note):/i;
+const RE_LINKER = /undefined reference|ld returned|collect2:|multiple definition of/i;
+const RE_MAKE = /^make:\s+\*\*\*|ninja: build stopped|FAILED:\s|\*\*\* \[/i;
+const RE_PY = /^Traceback \(most recent call last\)|^[A-Za-z]*Error: /;
+const RE_IDF = /idf\.py|CMake Error|ninja: error/i;
 
 export function buildOutput(input) {
   const lines = input.split("\n");
@@ -19,6 +24,14 @@ export function buildOutput(input) {
       inCargoError = false;
     }
     if (!trimmed) continue;
+    if (RE_GCC_DIAG.test(line) || RE_LINKER.test(line) || RE_MAKE.test(line) || RE_IDF.test(line)) {
+      errors.push(line);
+      continue;
+    }
+    if (RE_PY.test(trimmed) || /Error at line \d+/i.test(trimmed)) {
+      errors.push(line);
+      continue;
+    }
     if (/^npm (ERR!|error)/i.test(trimmed) || /^yarn error/i.test(trimmed)) { errors.push(line); continue; }
     if (/^npm warn deprecated/i.test(trimmed)) { deprecations.push(line); continue; }
     if (/^npm warn/i.test(trimmed) || /^yarn warn/i.test(trimmed)) { warnings.push(line); continue; }
