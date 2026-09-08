@@ -1,6 +1,6 @@
-const KEEP = /\b(FAIL|FAILED|ERROR|PANIC)\b|AssertionError|Traceback|panic:|not ok |undefined reference|[	imes✖]/i;
+const KEEP = /\b(FAIL|FAILED|ERROR|PANIC)\b|AssertionError|Traceback|panic:|not ok |undefined reference|\u00d7|\u2716/i;
 const SUMMARY = /^=+|test session starts|test result:|Ran \d+|Tests:\s|\d+ (passed|failed|skipped)|ok \d+ (failed|passed)/i;
-const PASS_LINE = /\bPASSED\b|^\s*(ok |✓|PASS )|\.\.\. ok$/i;
+const PASS_LINE = /\bPASSED\b|^\s*(ok |\u2713|PASS )|\.\.\. ok$/i;
 
 export function testRunner(input) {
   const lines = String(input).split("\n");
