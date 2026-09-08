@@ -14,8 +14,10 @@ const stats = {
   lastTool: "",
   lastFilter: "",
   lastKind: "",
+  hookAttached: false,
 };
 const state = createState();
+let persistTimer = null;
 
 function snapshot() {
   return {
@@ -32,12 +34,18 @@ function snapshot() {
     last_tool: stats.lastTool || "-",
     last_filter: stats.lastFilter || "-",
     last_kind: stats.lastKind || "-",
+    hook_attached: stats.hookAttached,
+    tokens_note: "approx chars/4",
   };
 }
 
-function persistBestEffort() {
+function persistDebounced() {
   if (!parsePersist()) return;
-  savePersistedStats({ calls: stats.calls, saved: stats.saved }).catch(() => {});
+  if (persistTimer) return;
+  persistTimer = setTimeout(() => {
+    persistTimer = null;
+    savePersistedStats(stats).catch(() => {});
+  }, 2000);
 }
 
 const statsSchema = {
@@ -57,6 +65,8 @@ const statsSchema = {
     last_tool: { type: "string", required: true },
     last_filter: { type: "string", required: true },
     last_kind: { type: "string", required: true },
+    hook_attached: { type: "boolean", required: true },
+    tokens_note: { type: "string", required: true },
   },
 };
 
@@ -65,10 +75,10 @@ function renderStats(value) {
     {
       type: "text",
       text:
-        `local-saver enabled=${value.enabled} level=${value.level} mode=${value.mode}\n` +
-        `Before: ${value.chars_before} chars (~${value.tokens_before} tokens)\n` +
-        `After: ${value.chars_after} chars (~${value.tokens_after} tokens)\n` +
-        `Saved: ${value.chars_saved} chars (~${value.tokens_saved} tokens)\n` +
+        `local-saver enabled=${value.enabled} level=${value.level} mode=${value.mode} hook=${value.hook_attached}\n` +
+        `Before: ${value.chars_before} chars (~${value.tokens_before} tokens approx)\n` +
+        `After: ${value.chars_after} chars (~${value.tokens_after} tokens approx)\n` +
+        `Saved: ${value.chars_saved} chars (~${value.tokens_saved} tokens approx)\n` +
         `last=${value.last_tool} kind=${value.last_kind} filter=${value.last_filter} calls=${value.calls}`,
     },
   ];
@@ -80,6 +90,8 @@ export function apply(ctx) {
       .then((loaded) => {
         stats.calls = loaded.calls;
         stats.saved = loaded.saved;
+        stats.charsBefore = loaded.charsBefore || 0;
+        stats.charsAfter = loaded.charsAfter || 0;
       })
       .catch(() => {});
   }
@@ -88,16 +100,16 @@ export function apply(ctx) {
     ctx.systemPrompt.section({
       name: "local-saver-terse",
       order: 50,
-      text: "Reply terse. Keep code, paths, errors exact. Drop filler.",
+      text: "Terse. No preamble. No restating the question. Prefer offsets/limits on read. Do not dump whole files. Keep exact code, paths, error lines.",
     });
   }
 
   ctx.tools.register(
     defineTool({
       name: "local_saver_stats",
-      description: "Show dsh-local-saver stats including estimated tokens saved. Local only.",
+      description: "Show dsh-local-saver stats. Token counts are approx (chars/4). Local only.",
       parameters: {},
-      output: { schema: statsSchema, render: (_args, value) => renderStats(value) },
+      output: { schema: statsSchema, render: (_a, v) => renderStats(v) },
       async execute() {
         return snapshot();
       },
@@ -107,14 +119,13 @@ export function apply(ctx) {
   ctx.tools.register(
     defineTool({
       name: "local_saver_toggle",
-      description:
-        "Set enabled, level 1-3, or mode coding-safe|balanced|aggressive. coding-safe keeps source lines and diff hunks. Local only.",
+      description: "Set enabled, level 1-3, or mode coding-safe|balanced|aggressive. Alias: normal=balanced. Local only.",
       parameters: {
-        enabled: { type: "boolean", description: "true = compress tool output, false = raw." },
-        level: { type: "number", description: "1 listings only, 2 +tree, 3 +git (aggressive only)." },
+        enabled: { type: "boolean", description: "true = compress, false = raw." },
+        level: { type: "number", description: "1 listings, 2 +tree, 3 +git." },
         mode: { type: "string", description: "coding-safe, balanced, or aggressive." },
       },
-      output: { schema: statsSchema, render: (_args, value) => renderStats(value) },
+      output: { schema: statsSchema, render: (_a, v) => renderStats(v) },
       async execute(args) {
         if (typeof args?.enabled === "boolean") state.enabled = args.enabled;
         if (args?.level === 1 || args?.level === 2 || args?.level === 3) state.level = args.level;
@@ -127,8 +138,14 @@ export function apply(ctx) {
   );
 
   const hook = async (payload, next) => {
-    const out = typeof next === "function" ? await next(payload) : payload;
+    const incoming = payload == null ? "" : payload;
+    const out = typeof next === "function" ? await next(incoming) : incoming;
     try {
+      if (typeof out === "string") {
+        const result = shrink("bash", out, state);
+        record(result, "bash");
+        return result.saved > 0 ? result.value : out;
+      }
       const toolName = payload?.name || payload?.toolName || out?.name || "";
       const slot =
         out && typeof out === "object"
@@ -142,24 +159,38 @@ export function apply(ctx) {
           : null;
       if (!slot) return out;
       const result = shrink(toolName, out[slot], state);
-      if (result.saved > 0) {
-        stats.calls += 1;
-        stats.saved += result.saved;
-        stats.charsBefore += result.chars_before || 0;
-        stats.charsAfter += result.chars_after || 0;
-        stats.lastTool = String(toolName || slot);
-        stats.lastFilter = String(result.filter || "");
-        stats.lastKind = String(result.kind || "");
-        persistBestEffort();
-        return { ...out, [slot]: result.value };
-      }
+      record(result, toolName || slot);
+      if (result.saved > 0) return { ...out, [slot]: result.value };
     } catch {
       // never break the tool pipeline
     }
     return out;
   };
 
+  function record(result, toolName) {
+    if (result.filter) {
+      stats.lastTool = String(toolName || "");
+      stats.lastFilter = String(result.filter || "");
+      stats.lastKind = String(result.kind || "");
+    }
+    if (result.saved > 0) {
+      stats.calls += 1;
+      stats.saved += result.saved;
+      stats.charsBefore += result.chars_before || 0;
+      stats.charsAfter += result.chars_after || 0;
+      persistDebounced();
+    }
+  }
+
+  const events = ["tools/post-execute", "tool/post-execute", "tools.after"];
   if (typeof ctx.on === "function") {
-    ctx.on("tools/post-execute", hook);
+    for (const ev of events) {
+      try {
+        ctx.on(ev, hook);
+        stats.hookAttached = true;
+      } catch {
+        // event name may not exist
+      }
+    }
   }
 }
