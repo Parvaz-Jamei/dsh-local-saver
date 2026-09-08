@@ -11,7 +11,7 @@
   "dsh": { "bundle": { "patch": "./cordis.patch.yml" } },
   "keywords": ["dsh-plugin", "deepseek-harness", "token-optimization", "developer-tools", "cli"],
   "license": "MIT",
-  "scripts": { "test": "node --test test/*.test.js" },
+  "scripts": { "test": "node --test test" },
   "author": "Parvaz Jamei <https://github.com/Parvaz-Jamei>",
   "homepage": "https://github.com/Parvaz-Jamei/dsh-local-saver",
   "repository": { "type": "git", "url": "git+https://github.com/Parvaz-Jamei/dsh-local-saver.git" },
