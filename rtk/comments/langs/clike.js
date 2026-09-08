@@ -23,7 +23,7 @@ function scanQuoted(s, i, quote, { allowNl = false } = {}) {
   return { error: "unclosed-string" };
 }
 
-function scanCppRaw(s, i) {
+export function scanCppRaw(s, i) {
   let k = i;
   if (s.startsWith("u8", k)) k += 2;
   else if (s[k] === "u" || s[k] === "U" || s[k] === "L") k += 1;
@@ -45,7 +45,7 @@ function scanCppRaw(s, i) {
   return { end: hit + close.length };
 }
 
-function scanRustRaw(s, i) {
+export function scanRustRaw(s, i) {
   let k = i;
   if (s[k] === "b" || s[k] === "c") k += 1;
   if (s[k] !== "r") return null;
@@ -113,10 +113,27 @@ function scanGoRaw(s, i) {
   return { end: hit + 1 };
 }
 
-export function scanClike(src, options = {}) {
-  const s = String(src);
+function scanLineComment(s, i) {
+  const start = i;
+  const end = skipLine(s, i + 2);
+  const value = s.slice(start, end);
+  const type = /^\s*\/\/[/!]/.test(value) ? "doc" : "line";
+  return { start, end, type, value };
+}
+
+function scanBlockComment(s, i) {
+  const start = i;
   const n = s.length;
-  const comments = [];
+  let k = i + 2;
+  while (k + 1 < n && !(s[k] === "*" && s[k + 1] === "/")) k += 1;
+  if (k + 1 >= n) return { error: "unclosed-block-comment" };
+  const end = k + 2;
+  const value = s.slice(start, end);
+  const type = /^\/\*[\*!]/.test(value) ? "doc" : "block";
+  return { start, end, type, value };
+}
+
+function takeRawOrString(s, i, options) {
   const {
     javaTextBlock = false,
     cppRaw = false,
@@ -126,87 +143,62 @@ export function scanClike(src, options = {}) {
     csharpRaw = false,
     goRaw = false,
   } = options;
+  const c = s[i];
+  const d = s[i + 1];
 
+  if (cppRaw) {
+    const raw = scanCppRaw(s, i);
+    if (raw) return raw;
+  }
+  if (rustRaw) {
+    const raw = scanRustRaw(s, i);
+    if (raw) return raw;
+  }
+  if (csharpRaw) {
+    const verb = scanCsharpVerbatim(s, i);
+    if (verb) return verb;
+  }
+  if (swiftMulti) {
+    const raw = scanHashQuoted(s, i, { tripleOk: true });
+    if (raw) return raw;
+  }
+  if ((javaTextBlock || kotlinTriple || csharpRaw || swiftMulti) && c === "\"" && d === "\"" && s[i + 2] === "\"") {
+    return scanTriple(s, i);
+  }
+  if (goRaw && c === "`") return scanGoRaw(s, i);
+  if (c === "\"" || c === "'") return scanQuoted(s, i, c, { allowNl: false });
+  return null;
+}
+
+export function scanClike(src, options = {}) {
+  const s = String(src);
+  const n = s.length;
+  const comments = [];
   let i = 0;
+
   while (i < n) {
     const c = s[i];
     const d = s[i + 1];
 
+    const skipped = takeRawOrString(s, i, options);
+    if (skipped) {
+      if (skipped.error) return { ok: false, reason: skipped.error };
+      i = skipped.end;
+      continue;
+    }
+
     if (c === "/" && d === "/") {
-      const start = i;
-      i = skipLine(s, i + 2);
-      const value = s.slice(start, i);
-      const type = /^\s*\/\/[/!]/.test(value) ? "doc" : "line";
-      comments.push({ start, end: i, type, value });
+      const hit = scanLineComment(s, i);
+      comments.push(hit);
+      i = hit.end;
       continue;
     }
 
     if (c === "/" && d === "*") {
-      const start = i;
-      i += 2;
-      while (i + 1 < n && !(s[i] === "*" && s[i + 1] === "/")) i += 1;
-      if (i + 1 >= n) return { ok: false, reason: "unclosed-block-comment" };
-      i += 2;
-      const value = s.slice(start, i);
-      const type = /^\/\*[\*!]/.test(value) ? "doc" : "block";
-      comments.push({ start, end: i, type, value });
-      continue;
-    }
-
-    if (cppRaw) {
-      const raw = scanCppRaw(s, i);
-      if (raw) {
-        if (raw.error) return { ok: false, reason: raw.error };
-        i = raw.end;
-        continue;
-      }
-    }
-
-    if (rustRaw) {
-      const raw = scanRustRaw(s, i);
-      if (raw) {
-        if (raw.error) return { ok: false, reason: raw.error };
-        i = raw.end;
-        continue;
-      }
-    }
-
-    if (csharpRaw) {
-      const verb = scanCsharpVerbatim(s, i);
-      if (verb) {
-        if (verb.error) return { ok: false, reason: verb.error };
-        i = verb.end;
-        continue;
-      }
-    }
-
-    if (swiftMulti) {
-      const raw = scanHashQuoted(s, i, { tripleOk: true });
-      if (raw) {
-        if (raw.error) return { ok: false, reason: raw.error };
-        i = raw.end;
-        continue;
-      }
-    }
-
-    if ((javaTextBlock || kotlinTriple || csharpRaw || swiftMulti) && c === "\"" && d === "\"" && s[i + 2] === "\"") {
-      const block = scanTriple(s, i);
-      if (block.error) return { ok: false, reason: block.error };
-      i = block.end;
-      continue;
-    }
-
-    if (goRaw && c === "`") {
-      const raw = scanGoRaw(s, i);
-      if (raw.error) return { ok: false, reason: raw.error };
-      i = raw.end;
-      continue;
-    }
-
-    if (c === "\"" || c === "'") {
-      const q = scanQuoted(s, i, c, { allowNl: false });
-      if (q.error) return { ok: false, reason: q.error };
-      i = q.end;
+      const hit = scanBlockComment(s, i);
+      if (hit.error) return { ok: false, reason: hit.error };
+      comments.push({ start: hit.start, end: hit.end, type: hit.type, value: hit.value });
+      i = hit.end;
       continue;
     }
 
