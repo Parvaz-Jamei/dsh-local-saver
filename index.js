@@ -1,11 +1,20 @@
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import { createState, parseCaveman, parsePersist, shrink } from "./saver-core.js";
 import { loadPersistedStats, savePersistedStats } from "./persist.js";
+import { estimateTokens } from "./rtk/tokens.js";
 
 export const name = "dsh-local-saver";
 export const inject = ["tools"];
 
-const stats = { calls: 0, saved: 0, lastTool: "", lastFilter: "" };
+const stats = {
+  calls: 0,
+  saved: 0,
+  charsBefore: 0,
+  charsAfter: 0,
+  lastTool: "",
+  lastFilter: "",
+  lastKind: "",
+};
 const state = createState();
 
 function snapshot() {
@@ -14,15 +23,55 @@ function snapshot() {
     level: state.level,
     mode: state.mode,
     calls: stats.calls,
+    chars_before: stats.charsBefore,
+    chars_after: stats.charsAfter,
     chars_saved: stats.saved,
+    tokens_before: estimateTokens(stats.charsBefore),
+    tokens_after: estimateTokens(stats.charsAfter),
+    tokens_saved: estimateTokens(stats.saved),
     last_tool: stats.lastTool || "-",
     last_filter: stats.lastFilter || "-",
+    last_kind: stats.lastKind || "-",
   };
 }
 
 function persistBestEffort() {
   if (!parsePersist()) return;
-  savePersistedStats(stats).catch(() => {});
+  savePersistedStats({ calls: stats.calls, saved: stats.saved }).catch(() => {});
+}
+
+const statsSchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    enabled: { type: "boolean", required: true },
+    level: { type: "number", required: true },
+    mode: { type: "string", required: true },
+    calls: { type: "number", required: true },
+    chars_before: { type: "number", required: true },
+    chars_after: { type: "number", required: true },
+    chars_saved: { type: "number", required: true },
+    tokens_before: { type: "number", required: true },
+    tokens_after: { type: "number", required: true },
+    tokens_saved: { type: "number", required: true },
+    last_tool: { type: "string", required: true },
+    last_filter: { type: "string", required: true },
+    last_kind: { type: "string", required: true },
+  },
+};
+
+function renderStats(value) {
+  return [
+    {
+      type: "text",
+      text:
+        `local-saver enabled=${value.enabled} level=${value.level} mode=${value.mode}\n` +
+        `Before: ${value.chars_before} chars (~${value.tokens_before} tokens)\n` +
+        `After: ${value.chars_after} chars (~${value.tokens_after} tokens)\n` +
+        `Saved: ${value.chars_saved} chars (~${value.tokens_saved} tokens)\n` +
+        `last=${value.last_tool} kind=${value.last_kind} filter=${value.last_filter} calls=${value.calls}`,
+    },
+  ];
 }
 
 export function apply(ctx) {
@@ -46,30 +95,9 @@ export function apply(ctx) {
   ctx.tools.register(
     defineTool({
       name: "local_saver_stats",
-      description:
-        "Show dsh-local-saver stats and current settings. Local only: does not read API keys and does not use the network.",
+      description: "Show dsh-local-saver stats including estimated tokens saved. Local only.",
       parameters: {},
-      output: {
-        schema: {
-          type: "object",
-          additionalProperties: false,
-          properties: {
-            enabled: { type: "boolean", required: true },
-            level: { type: "number", required: true },
-            mode: { type: "string", required: true },
-            calls: { type: "number", required: true },
-            chars_saved: { type: "number", required: true },
-            last_tool: { type: "string", required: true },
-            last_filter: { type: "string", required: true },
-          },
-        },
-        render: (_args, value) => [
-          {
-            type: "text",
-            text: `local-saver enabled=${value.enabled} level=${value.level} mode=${value.mode} calls=${value.calls} chars_saved=${value.chars_saved} last=${value.last_tool} filter=${value.last_filter}`,
-          },
-        ],
-      },
+      output: { schema: statsSchema, render: (_args, value) => renderStats(value) },
       async execute() {
         return snapshot();
       },
@@ -80,51 +108,19 @@ export function apply(ctx) {
     defineTool({
       name: "local_saver_toggle",
       description:
-        "Enable/disable local tool-output compression, set level 1/2/3, or set mode coding-safe|normal|aggressive for this session. Use coding-safe when editing source (keeps read_file and git diff raw). Local only.",
+        "Set enabled, level 1-3, or mode coding-safe|balanced|aggressive. coding-safe keeps source lines and diff hunks. Local only.",
       parameters: {
-        enabled: {
-          type: "boolean",
-          description: "true = compress tool output, false = pass through raw.",
-        },
-        level: {
-          type: "number",
-          description: "Compression level 1 (no tree/git), 2 (+tree), or 3 (+git). Default 3.",
-        },
-        mode: {
-          type: "string",
-          description: "coding-safe (default, keep source and diffs), normal, or aggressive.",
-        },
+        enabled: { type: "boolean", description: "true = compress tool output, false = raw." },
+        level: { type: "number", description: "1 listings only, 2 +tree, 3 +git (aggressive only)." },
+        mode: { type: "string", description: "coding-safe, balanced, or aggressive." },
       },
-      output: {
-        schema: {
-          type: "object",
-          additionalProperties: false,
-          properties: {
-            enabled: { type: "boolean", required: true },
-            level: { type: "number", required: true },
-            mode: { type: "string", required: true },
-            calls: { type: "number", required: true },
-            chars_saved: { type: "number", required: true },
-            last_tool: { type: "string", required: true },
-            last_filter: { type: "string", required: true },
-          },
-        },
-        render: (_args, value) => [
-          {
-            type: "text",
-            text: `local-saver now enabled=${value.enabled} level=${value.level} mode=${value.mode}`,
-          },
-        ],
-      },
+      output: { schema: statsSchema, render: (_args, value) => renderStats(value) },
       async execute(args) {
         if (typeof args?.enabled === "boolean") state.enabled = args.enabled;
-        if (args?.level === 1 || args?.level === 2 || args?.level === 3) {
-          state.level = args.level;
-        }
+        if (args?.level === 1 || args?.level === 2 || args?.level === 3) state.level = args.level;
         const mode = String(args?.mode ?? "").trim().toLowerCase();
-        if (mode === "coding-safe" || mode === "normal" || mode === "aggressive") {
-          state.mode = mode;
-        }
+        if (mode === "coding-safe" || mode === "aggressive") state.mode = mode;
+        if (mode === "balanced" || mode === "normal") state.mode = "balanced";
         return snapshot();
       },
     }),
@@ -145,14 +141,17 @@ export function apply(ctx) {
                 : null
           : null;
       if (!slot) return out;
-      const { value, saved, filter } = shrink(toolName, out[slot], state);
-      if (saved > 0) {
+      const result = shrink(toolName, out[slot], state);
+      if (result.saved > 0) {
         stats.calls += 1;
-        stats.saved += saved;
+        stats.saved += result.saved;
+        stats.charsBefore += result.chars_before || 0;
+        stats.charsAfter += result.chars_after || 0;
         stats.lastTool = String(toolName || slot);
-        stats.lastFilter = String(filter || "");
+        stats.lastFilter = String(result.filter || "");
+        stats.lastKind = String(result.kind || "");
         persistBestEffort();
-        return { ...out, [slot]: value };
+        return { ...out, [slot]: result.value };
       }
     } catch {
       // never break the tool pipeline
