@@ -8,7 +8,7 @@ import { jsonCompact, looksLikeJson } from "./rtk/filters/jsonCompact.js";
 import { tokenReport } from "./rtk/tokens.js";
 import { stripAnsi } from "./rtk/stripAnsi.js";
 import { hardCapChars, windowText } from "./rtk/hardCap.js";
-import { stripSourceComments } from "./rtk/comments/index.js";
+import { stripSourceComments, resolveFilePath } from "./rtk/comments/index.js";
 
 export const TARGETS = new Set([
   "bash", "pwsh", "grep", "read", "read_file", "exec", "run_code",
@@ -104,6 +104,17 @@ export function resolveToolName(payload, out) {
   );
 }
 
+export { resolveFilePath };
+
+function allowCommentStrip(toolName, kind, raw = "") {
+  const name = String(toolName || "");
+  if (DENY_TOOLS.has(name)) return false;
+  if (!SOURCE_TOOLS.has(name)) return false;
+  if (kind === "git-diff") return false;
+  if (/^diff --git /m.test(String(raw))) return false;
+  return true;
+}
+
 function allowedTool(name) {
   if (!name) return true;
   return !DENY_TOOLS.has(String(name));
@@ -191,10 +202,13 @@ export function shrink(toolName, value, state = { enabled: true, level: DEFAULT_
 
   let commentMeta = null;
   const stripMode = state.stripComments;
-  const allowStrip = stripMode && kind !== "git-diff" && (kind === "source" || SOURCE_TOOLS.has(String(toolName)));
-  if (allowStrip) {
+  if (stripMode && allowCommentStrip(toolName, kind, raw)) {
     const preview = stripMode === "preview" || !!state.dryRun;
-    const cut = stripSourceComments(text, { preview, toolName });
+    const cut = stripSourceComments(text, {
+      preview,
+      toolName,
+      filePath: state.filePath || "",
+    });
     commentMeta = {
       comments_language: cut.language,
       comments_seen: cut.comments_seen,
