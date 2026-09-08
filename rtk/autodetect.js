@@ -38,12 +38,12 @@ export function autoDetectFilter(text, level = DEFAULT_LEVEL) {
 
   const head = text.length > DETECT_WINDOW ? text.slice(0, DETECT_WINDOW) : text;
 
-  if (RE_GIT_LOG.test(head)) {
-    const hit = allowed(gitLog);
+  if (RE_GIT_DIFF.test(head) || RE_GIT_DIFF.test(text.slice(0, 8000)) || RE_GIT_DIFF_HUNK.test(head)) {
+    const hit = allowed(gitDiff);
     if (hit) return hit;
   }
-  if (RE_GIT_DIFF.test(head) || RE_GIT_DIFF_HUNK.test(head)) {
-    const hit = allowed(gitDiff);
+  if (RE_GIT_LOG.test(head)) {
+    const hit = allowed(gitLog);
     if (hit) return hit;
   }
   if (RE_GIT_STATUS.test(head)) {
