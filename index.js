@@ -5,10 +5,6 @@ import { estimateTokens } from "./rtk/tokens.js";
 export const name = "dsh-local-saver";
 export const inject = ["tools"];
 
-function defineTool(def) {
-  return def;
-}
-
 const stats = {
   calls: 0,
   processed: 0,
@@ -92,6 +88,24 @@ const stringOut = {
   render: (_a, v) => [{ type: "text", text: String(v) }],
 };
 
+const emptyObjectParams = {
+  type: "object",
+  properties: {
+    unused: { type: "string", description: "Ignored." },
+  },
+};
+
+const toggleParams = {
+  type: "object",
+  properties: {
+    enabled: { type: "boolean", description: "true = compress, false = raw." },
+    level: { type: "number", description: "1 listings, 2 +tree, 3 +git." },
+    mode: { type: "string", description: "coding-safe, balanced, or aggressive." },
+    dry_run: { type: "boolean", description: "true = measure only." },
+    strip_comments: { type: "string", description: "off | preview | on." },
+  },
+};
+
 export function apply(ctx) {
   if (parsePersist()) {
     loadPersistedStats()
@@ -105,65 +119,37 @@ export function apply(ctx) {
       .catch(() => {});
   }
 
-  try {
-    const section = ctx.systemPrompt && ctx.systemPrompt.section;
-    if (typeof section === "function") {
-      section.call(ctx.systemPrompt, {
-        name: "local-saver-status",
-        order: 40,
-        text: `local-saver ${state.enabled ? "ON" : "OFF"} mode=${state.mode} level=${state.level} strip_comments=${stripLabel()}. Compression may drop tool text.`,
-      });
-    }
-  } catch {
-    // ignore missing systemPrompt inject
-  }
+  ctx.tools.register({
+    name: "local_saver_stats",
+    description: "Show dsh-local-saver stats. Token counts are approx (chars/4). Local only.",
+    parameters: emptyObjectParams,
+    output: stringOut,
+    async execute() {
+      return formatStats(snapshot());
+    },
+  });
 
-  ctx.tools.register(
-    defineTool({
-      name: "local_saver_stats",
-      description: "Show dsh-local-saver stats. Token counts are approx (chars/4), not provider usage. Local only.",
-      parameters: {
-        unused: { type: "string", description: "Ignored. Present so the API schema is a JSON object." },
-      },
-      output: stringOut,
-      async execute() {
-        return formatStats(snapshot());
-      },
-    }),
-  );
-
-  ctx.tools.register(
-    defineTool({
-      name: "local_saver_toggle",
-      description: "Set enabled, level 1-3, mode, dry_run, or strip_comments off|preview|on. Local only.",
-      parameters: {
-        enabled: { type: "boolean", description: "true = compress, false = raw." },
-        level: { type: "number", description: "1 listings, 2 +tree, 3 +git." },
-        mode: { type: "string", description: "coding-safe, balanced, or aggressive." },
-        dry_run: { type: "boolean", description: "true = measure only, do not rewrite tool output." },
-        strip_comments: {
-          type: "string",
-          description: "off | preview | on. Default off. preview reports counts without deleting.",
-        },
-      },
-      output: stringOut,
-      async execute(args) {
-        if (typeof args?.enabled === "boolean") state.enabled = args.enabled;
-        if (args?.level === 1 || args?.level === 2 || args?.level === 3) state.level = args.level;
-        const mode = String(args?.mode ?? "").trim().toLowerCase();
-        if (mode === "coding-safe" || mode === "aggressive") state.mode = mode;
-        if (mode === "balanced" || mode === "normal") state.mode = "balanced";
-        if (typeof args?.dry_run === "boolean") state.dryRun = args.dry_run;
-        if (args?.strip_comments != null) {
-          const sc = String(args.strip_comments).trim().toLowerCase();
-          if (sc === "preview" || sc === "dry") state.stripComments = "preview";
-          else if (sc === "on" || sc === "true" || sc === "1") state.stripComments = true;
-          else state.stripComments = false;
-        }
-        return formatStats(snapshot());
-      },
-    }),
-  );
+  ctx.tools.register({
+    name: "local_saver_toggle",
+    description: "Set enabled, level 1-3, mode, dry_run, or strip_comments off|preview|on. Local only.",
+    parameters: toggleParams,
+    output: stringOut,
+    async execute(args) {
+      if (typeof args?.enabled === "boolean") state.enabled = args.enabled;
+      if (args?.level === 1 || args?.level === 2 || args?.level === 3) state.level = args.level;
+      const mode = String(args?.mode ?? "").trim().toLowerCase();
+      if (mode === "coding-safe" || mode === "aggressive") state.mode = mode;
+      if (mode === "balanced" || mode === "normal") state.mode = "balanced";
+      if (typeof args?.dry_run === "boolean") state.dryRun = args.dry_run;
+      if (args?.strip_comments != null) {
+        const sc = String(args.strip_comments).trim().toLowerCase();
+        if (sc === "preview" || sc === "dry") state.stripComments = "preview";
+        else if (sc === "on" || sc === "true" || sc === "1") state.stripComments = true;
+        else state.stripComments = false;
+      }
+      return formatStats(snapshot());
+    },
+  });
 
   const hook = async (payload, next) => {
     const incoming = payload == null ? "" : payload;
@@ -230,26 +216,12 @@ export function apply(ctx) {
   }
 
   if (typeof ctx.on === "function") {
-    const primary = "tools/post-execute";
-    const fallbacks = ["tool/post-execute", "tools.after"];
     try {
-      ctx.on(primary, hook);
+      ctx.on("tools/post-execute", hook);
       stats.hookAttached = true;
-      stats.hookEvent = primary;
+      stats.hookEvent = "tools/post-execute";
     } catch {
-      // fallbacks only if primary rejected
-    }
-    if (!stats.hookAttached) {
-      for (const ev of fallbacks) {
-        try {
-          ctx.on(ev, hook);
-          stats.hookAttached = true;
-          stats.hookEvent = ev;
-          break;
-        } catch {
-          // next
-        }
-      }
+      // ignore
     }
   }
   if (!stats.hookAttached && !warnedHook) {
