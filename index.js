@@ -1,5 +1,5 @@
 import { defineTool } from "@deepseek-ai/dsh-tools";
-import { createState, parseCaveman, parsePersist, shrink } from "./saver-core.js";
+import { createState, parseCaveman, parsePersist, shrink, resolveToolName } from "./saver-core.js";
 import { loadPersistedStats, savePersistedStats } from "./persist.js";
 import { estimateTokens } from "./rtk/tokens.js";
 
@@ -8,6 +8,8 @@ export const inject = ["tools"];
 
 const stats = {
   calls: 0,
+  processed: 0,
+  compressed: 0,
   saved: 0,
   charsBefore: 0,
   charsAfter: 0,
@@ -15,16 +17,22 @@ const stats = {
   lastFilter: "",
   lastKind: "",
   hookAttached: false,
+  hookEvent: "",
 };
 const state = createState();
 let persistTimer = null;
+let warnedHook = false;
+const seenIds = new Set();
 
 function snapshot() {
   return {
     enabled: state.enabled,
     level: state.level,
     mode: state.mode,
-    calls: stats.calls,
+    dry_run: !!state.dryRun,
+    processed_calls: stats.processed,
+    compressed_calls: stats.compressed,
+    calls: stats.compressed,
     chars_before: stats.charsBefore,
     chars_after: stats.charsAfter,
     chars_saved: stats.saved,
@@ -35,7 +43,8 @@ function snapshot() {
     last_filter: stats.lastFilter || "-",
     last_kind: stats.lastKind || "-",
     hook_attached: stats.hookAttached,
-    tokens_note: "approx chars/4",
+    hook_event: stats.hookEvent || "-",
+    tokens_note: "approx chars/4 — not a provider tokenizer",
   };
 }
 
@@ -55,6 +64,9 @@ const statsSchema = {
     enabled: { type: "boolean", required: true },
     level: { type: "number", required: true },
     mode: { type: "string", required: true },
+    dry_run: { type: "boolean", required: true },
+    processed_calls: { type: "number", required: true },
+    compressed_calls: { type: "number", required: true },
     calls: { type: "number", required: true },
     chars_before: { type: "number", required: true },
     chars_after: { type: "number", required: true },
@@ -66,6 +78,7 @@ const statsSchema = {
     last_filter: { type: "string", required: true },
     last_kind: { type: "string", required: true },
     hook_attached: { type: "boolean", required: true },
+    hook_event: { type: "string", required: true },
     tokens_note: { type: "string", required: true },
   },
 };
@@ -75,11 +88,12 @@ function renderStats(value) {
     {
       type: "text",
       text:
-        `local-saver enabled=${value.enabled} level=${value.level} mode=${value.mode} hook=${value.hook_attached}\n` +
-        `Before: ${value.chars_before} chars (~${value.tokens_before} tokens approx)\n` +
-        `After: ${value.chars_after} chars (~${value.tokens_after} tokens approx)\n` +
-        `Saved: ${value.chars_saved} chars (~${value.tokens_saved} tokens approx)\n` +
-        `last=${value.last_tool} kind=${value.last_kind} filter=${value.last_filter} calls=${value.calls}`,
+        `local-saver enabled=${value.enabled} level=${value.level} mode=${value.mode} dry_run=${value.dry_run} hook=${value.hook_attached} event=${value.hook_event}\n` +
+        `processed=${value.processed_calls} compressed=${value.compressed_calls}\n` +
+        `Before: ${value.chars_before} chars (~${value.tokens_before} tokens approx chars/4)\n` +
+        `After: ${value.chars_after} chars (~${value.tokens_after} tokens approx chars/4)\n` +
+        `Saved: ${value.chars_saved} chars (~${value.tokens_saved} tokens approx chars/4)\n` +
+        `last=${value.last_tool} kind=${value.last_kind} filter=${value.last_filter}`,
     },
   ];
 }
@@ -89,6 +103,7 @@ export function apply(ctx) {
     loadPersistedStats()
       .then((loaded) => {
         stats.calls = loaded.calls;
+        stats.compressed = loaded.calls || 0;
         stats.saved = loaded.saved;
         stats.charsBefore = loaded.charsBefore || 0;
         stats.charsAfter = loaded.charsAfter || 0;
@@ -96,18 +111,24 @@ export function apply(ctx) {
       .catch(() => {});
   }
 
-  if (parseCaveman() && ctx.systemPrompt && typeof ctx.systemPrompt.section === "function") {
-    ctx.systemPrompt.section({
-      name: "local-saver-terse",
-      order: 50,
-      text: "Terse. No preamble. No restating the question. Prefer offsets/limits on read. Do not dump whole files. Keep exact code, paths, error lines.",
-    });
+  const statusLine = `local-saver ${state.enabled ? "ON" : "OFF"} mode=${state.mode} level=${state.level}. Compression may drop tool text. Tokens in stats are approx chars/4.`;
+  if (ctx.systemPrompt && typeof ctx.systemPrompt.section === "function") {
+    ctx.systemPrompt.section({ name: "local-saver-status", order: 40, text: statusLine });
+    if (parseCaveman()) {
+      ctx.systemPrompt.section({
+        name: "local-saver-terse",
+        order: 50,
+        text: "Terse. No preamble. No restating the question. Prefer offsets/limits on read. Do not dump whole files. Keep exact code, paths, error lines.",
+      });
+    }
+  } else if (state.enabled) {
+    console.warn(`[dsh-local-saver] ${statusLine}`);
   }
 
   ctx.tools.register(
     defineTool({
       name: "local_saver_stats",
-      description: "Show dsh-local-saver stats. Token counts are approx (chars/4). Local only.",
+      description: "Show dsh-local-saver stats. Token counts are approx (chars/4), not provider usage. Local only.",
       parameters: {},
       output: { schema: statsSchema, render: (_a, v) => renderStats(v) },
       async execute() {
@@ -119,11 +140,12 @@ export function apply(ctx) {
   ctx.tools.register(
     defineTool({
       name: "local_saver_toggle",
-      description: "Set enabled, level 1-3, or mode coding-safe|balanced|aggressive. Alias: normal=balanced. Local only.",
+      description: "Set enabled, level 1-3, mode coding-safe|balanced|aggressive, or dry_run. Alias: normal=balanced. Local only.",
       parameters: {
         enabled: { type: "boolean", description: "true = compress, false = raw." },
         level: { type: "number", description: "1 listings, 2 +tree, 3 +git." },
         mode: { type: "string", description: "coding-safe, balanced, or aggressive." },
+        dry_run: { type: "boolean", description: "true = measure only, do not rewrite tool output." },
       },
       output: { schema: statsSchema, render: (_a, v) => renderStats(v) },
       async execute(args) {
@@ -132,6 +154,7 @@ export function apply(ctx) {
         const mode = String(args?.mode ?? "").trim().toLowerCase();
         if (mode === "coding-safe" || mode === "aggressive") state.mode = mode;
         if (mode === "balanced" || mode === "normal") state.mode = "balanced";
+        if (typeof args?.dry_run === "boolean") state.dryRun = args.dry_run;
         return snapshot();
       },
     }),
@@ -141,12 +164,21 @@ export function apply(ctx) {
     const incoming = payload == null ? "" : payload;
     const out = typeof next === "function" ? await next(incoming) : incoming;
     try {
-      if (typeof out === "string") {
-        const result = shrink("bash", out, state);
-        record(result, "bash");
-        return result.saved > 0 ? result.value : out;
+      const id = payload && typeof payload === "object"
+        ? payload.id || payload.toolCallId || payload.call_id || payload.tool_call_id
+        : null;
+      if (id) {
+        const key = String(id);
+        if (seenIds.has(key)) return out;
+        seenIds.add(key);
+        if (seenIds.size > 256) seenIds.delete(seenIds.values().next().value);
       }
-      const toolName = payload?.name || payload?.toolName || out?.name || "";
+      const toolName = resolveToolName(payload, out);
+      if (typeof out === "string") {
+        const result = shrink(toolName, out, state);
+        record(result, toolName || "string");
+        return result.saved > 0 && !state.dryRun ? result.value : out;
+      }
       const slot =
         out && typeof out === "object"
           ? "result" in out
@@ -160,7 +192,7 @@ export function apply(ctx) {
       if (!slot) return out;
       const result = shrink(toolName, out[slot], state);
       record(result, toolName || slot);
-      if (result.saved > 0) return { ...out, [slot]: result.value };
+      if (result.saved > 0 && !state.dryRun) return { ...out, [slot]: result.value };
     } catch {
       // never break the tool pipeline
     }
@@ -168,13 +200,15 @@ export function apply(ctx) {
   };
 
   function record(result, toolName) {
-    if (result.filter) {
+    if (result.processed || result.filter) {
+      stats.processed += 1;
       stats.lastTool = String(toolName || "");
       stats.lastFilter = String(result.filter || "");
       stats.lastKind = String(result.kind || "");
     }
     if (result.saved > 0) {
       stats.calls += 1;
+      stats.compressed += 1;
       stats.saved += result.saved;
       stats.charsBefore += result.chars_before || 0;
       stats.charsAfter += result.chars_after || 0;
@@ -182,15 +216,31 @@ export function apply(ctx) {
     }
   }
 
-  const events = ["tools/post-execute", "tool/post-execute", "tools.after"];
   if (typeof ctx.on === "function") {
-    for (const ev of events) {
-      try {
-        ctx.on(ev, hook);
-        stats.hookAttached = true;
-      } catch {
-        // event name may not exist
+    const primary = "tools/post-execute";
+    const fallbacks = ["tool/post-execute", "tools.after"];
+    try {
+      ctx.on(primary, hook);
+      stats.hookAttached = true;
+      stats.hookEvent = primary;
+    } catch {
+      // fallbacks only if primary rejected
+    }
+    if (!stats.hookAttached) {
+      for (const ev of fallbacks) {
+        try {
+          ctx.on(ev, hook);
+          stats.hookAttached = true;
+          stats.hookEvent = ev;
+          break;
+        } catch {
+          // next
+        }
       }
     }
+  }
+  if (!stats.hookAttached && !warnedHook) {
+    warnedHook = true;
+    console.warn("[dsh-local-saver] hook not attached; plugin idle. Check DSH tools/post-execute. local_saver_stats.hook_attached=false");
   }
 }
