@@ -4,43 +4,34 @@
 [![Node.js](https://img.shields.io/badge/node-%3E%3D20-339933?logo=node.js)](https://nodejs.org/)
 [![test](https://github.com/Parvaz-Jamei/dsh-local-saver/actions/workflows/test.yml/badge.svg)](https://github.com/Parvaz-Jamei/dsh-local-saver/actions/workflows/test.yml)
 
-Independent, community-built utility. Not affiliated with, endorsed
-by, or sponsored by DeepSeek or 9Router. 'DeepSeek' is a trademark of
-its respective owner. Filter logic under rtk/ is a compatible
-re-implementation ported under 9Router's MIT license — see NOTICE.
+Independent utility. Not affiliated with, endorsed by, or sponsored by DeepSeek or 9Router. DeepSeek is a trademark of its owner. Filter logic under `rtk/` is an MIT-licensed port — see NOTICE.
 
-Local DeepSeek Harness plugin. Compresses long tool output before it is sent back to the model.
+Local DeepSeek Harness plugin. It compresses long tool output before that text is sent back to the model.
 
-This is a host-side interceptor, not a proxy. It does not read `~/.dsh/.credentials.yaml`, does not open sockets, and does not sit in front of `api.deepseek.com`.
+Host-side interceptor. It does not read `~/.dsh/.credentials.yaml`, does not open sockets, and does not sit in front of `api.deepseek.com`.
 
 ## What it does
 
-Hooks `tools/post-execute` and, for `bash` / `pwsh` / `grep` / `read` / `read_file` / `exec` / `run_code`, runs an autodetect + compact pipeline:
+Hooks `tools/post-execute` for `bash` / `pwsh` / `grep` / `read` / `read_file` / `exec` / `run_code` and runs autodetect + compact:
 
 - git-diff / git-status / git-log
 - grep / find / ls / tree
 - build-output
 - dedup-log / smart-truncate / read-numbered / search-list
 
-Grep paths understand a Windows drive prefix. Errors are left alone. Blobs under 500 characters are left alone.
+Windows grep paths (`C:\\...:12:line`) are parsed correctly. Error blobs and outputs under 500 characters pass through unchanged.
 
-This is not a bill-cutter by itself. Peak/off-peak DeepSeek pricing and model routing stay in `docs/AGENTS.md`.
+Use `docs/AGENTS.md` for peak/off-peak scheduling and model routing. This plugin handles tool-output size.
 
 ## Install
 
-Copy the whole directory. `index.js` imports `saver-core.js` and `persist.js`.
-
 ```bash
 dsh plugin --profile web add "/absolute/path/dsh-local-saver"
-```
-
-From this repository:
-
-```bash
+# or
 dsh plugin --profile web add "github:Parvaz-Jamei/dsh-local-saver"
 ```
 
-Restart the harness. Keep the DeepSeek key on the official Settings → Models card.
+Restart the harness. Keep the DeepSeek key on Settings → Models.
 
 ## Env
 
@@ -60,17 +51,15 @@ Restart the harness. Keep the DeepSeek key on the official Settings → Models c
 ## Tools
 
 - `local_saver_stats` — enabled, level, calls, chars_saved, last tool/filter
-- `local_saver_toggle` — optional `enabled` and `level` for the current process
+- `local_saver_toggle` — `enabled` and `level` for this process
 
 ## Persist
 
-Off by default. With `DSH_LOCAL_SAVER_PERSIST=1` the plugin writes only `{"calls":0,"saved":0}` to `$DSH_HOME/local-saver-stats.json`. Tool text is never written.
+Off unless `DSH_LOCAL_SAVER_PERSIST=1`. Then only `{"calls":N,"saved":N}` is written to `$DSH_HOME/local-saver-stats.json`. Tool text is never stored.
 
 ## Caveman
 
-`DSH_LOCAL_SAVER_CAVEMAN=1` is off by default.
-
-This plugin attempts to use ctx.systemPrompt.section() if the harness exposes it, but this API is not confirmed against official dsh-tools docs — if it's absent, DSH_LOCAL_SAVER_CAVEMAN=1 silently does nothing (no crash, no output change). Check the official dsh-tools API reference to confirm before relying on this in production; until then, prefer writing terse style manually in your own system prompt/AGENTS.md.
+`DSH_LOCAL_SAVER_CAVEMAN=1` registers a short terse section when `ctx.systemPrompt.section()` exists. If the harness does not expose that method, the flag is a no-op.
 
 ## Tests
 
@@ -86,9 +75,7 @@ Embedded software — industrial IoT and edge AI
 
 ## Acknowledgments
 
-rtk/ filter logic: ported from 9Router (github.com/decolua/9router),
-MIT licensed. This project is not a fork and does not include
-9Router's gateway, provider routing, or key storage.
+rtk/ filter logic: ported from 9Router (github.com/decolua/9router), MIT licensed. This project is not a fork and does not include 9Router's gateway, provider routing, or key storage.
 
 ## License
 

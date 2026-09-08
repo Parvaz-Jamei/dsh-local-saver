@@ -14,4 +14,4 @@ jobs:
         with:
           node-version: "20"
       - name: Unit tests
-        run: node --test test/persist.test.js
+        run: node --test test/persist.test.js test/compress.test.js
