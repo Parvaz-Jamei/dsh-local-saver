@@ -1,7 +1,6 @@
-نصب روی DeepSeek Harness (dsh)
+نصب روی DeepSeek Harness (dsh) — نسخه 0.6.2
 
-1) کل پوشه را دست‌نخورده کپی کن. index.js به saver-core.js و persist.js وابسته است
-   و بدون آن‌ها لود نمی‌شود. حداقل این‌ها باید با هم باشند:
+1) کل پوشه را دست‌نخورده کپی کن. حداقل این‌ها باید با هم باشند:
 
    package.json
    cordis.patch.yml
@@ -9,10 +8,13 @@
    compress.js
    saver-core.js
    persist.js
-   rtk/**          (کل پوشه، شامل rtk/filters و rtk/windowsPath.js)
-   docs/**         (اختیاری — AGENTS.md داخل پکیج)
+   rtk/**          (شامل rtk/comments و rtk/filters)
 
 2) از ترمینال:
+
+   dsh plugin --profile web add "github:Parvaz-Jamei/dsh-local-saver"
+
+   یا مسیر محلی:
 
    dsh plugin --profile web add "/مسیر/کامل/dsh-local-saver"
 
@@ -22,13 +24,23 @@
 
 3) هارنس را کامل ببند و دوباره باز کن.
 
-4) کلید DeepSeek را عوض نکن. همان Settings → Models رسمی بماند.
-   این ماژول کلید را نمی‌خواند و به جایی نمی‌فرستد.
+4) کلید DeepSeek را عوض نکن. این ماژول کلید را نمی‌خواند و به جایی نمی‌فرستد.
 
-5) تست: در چت بگو «local_saver_stats را صدا بزن».
-   باید اعداد calls / chars_saved بیاید.
+5) تست هوک:
 
-اگر پلاگین در لیست باندل نیامد، package.json باید فیلد زیر را داشته باشد
-(همین پوشه دارد):
+   Use local_saver_stats
+
+   باید hook_attached=true باشد.
+
+6) حذف کامنت پیش‌فرض خاموش است. اول preview:
+
+   Use local_saver_toggle with strip_comments preview
+   Use local_saver_stats
+
+   اگر اعداد seen/removed/kept درست بود:
+
+   Use local_saver_toggle with strip_comments on
+
+اگر پلاگین در لیست باندل نیامد، package.json باید این را داشته باشد:
 
   "dsh": { "bundle": { "patch": "./cordis.patch.yml" } }
