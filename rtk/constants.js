@@ -16,8 +16,7 @@ export const LS_NOISE_DIRS = [
   "node_modules", ".git", "target", "__pycache__",
   ".next", "dist", "build", ".cache", ".turbo",
   ".vercel", ".pytest_cache", ".mypy_cache", ".tox",
-  ".venv", "venv",
-  "env",
+  ".venv", "venv", "env",
   "coverage", ".nyc_output", ".DS_Store", "Thumbs.db",
   ".idea", ".vscode", ".vs", "*.egg-info", ".eggs"
 ];
@@ -41,12 +40,17 @@ export const FILTERS = {
   SMART_TRUNCATE: "smart-truncate",
   READ_NUMBERED: "read-numbered",
   SEARCH_LIST: "search-list",
-  BUILD_OUTPUT: "build-output"
+  BUILD_OUTPUT: "build-output",
+  TEST_RUNNER: "test-runner",
+  TABLE_COLS: "table-cols",
+  JSON_COMPACT: "json-compact",
+  HTML_MD: "html-md"
 };
 
 const LEVEL1 = [
   FILTERS.GREP, FILTERS.FIND, FILTERS.LS, FILTERS.DEDUP_LOG,
   FILTERS.SMART_TRUNCATE, FILTERS.READ_NUMBERED, FILTERS.SEARCH_LIST, FILTERS.BUILD_OUTPUT,
+  FILTERS.TEST_RUNNER, FILTERS.TABLE_COLS, FILTERS.JSON_COMPACT, FILTERS.HTML_MD,
 ];
 const LEVEL2 = [...LEVEL1, FILTERS.TREE];
 const LEVEL3 = [...LEVEL2, FILTERS.GIT_DIFF, FILTERS.GIT_STATUS, FILTERS.GIT_LOG];
