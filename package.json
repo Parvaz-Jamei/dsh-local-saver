@@ -1,0 +1,52 @@
+{
+  "name": "dsh-local-saver",
+  "version": "0.2.0",
+  "private": false,
+  "description": "DSH plugin: 9Router RTK filters ported locally. Compresses tool output. No proxy, no API keys.",
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "compress.js",
+    "saver-core.js",
+    "persist.js",
+    "cordis.patch.yml",
+    "NOTICE",
+    "LICENSE",
+    "rtk/**",
+    "docs/**"
+  ],
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "*",
+    "@deepseek-ai/dsh-tools": "*"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "keywords": [
+    "dsh-plugin",
+    "deepseek-harness",
+    "rtk",
+    "token-saver",
+    "local"
+  ],
+  "license": "MIT",
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  },
+  "author": "Parvaz Jamei <https://github.com/Parvaz-Jamei>",
+  "homepage": "https://github.com/Parvaz-Jamei/dsh-local-saver",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Parvaz-Jamei/dsh-local-saver.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Parvaz-Jamei/dsh-local-saver/issues"
+  }
+}
