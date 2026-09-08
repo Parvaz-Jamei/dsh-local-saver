@@ -2,7 +2,7 @@
   "name": "dsh-local-saver",
   "version": "0.2.0",
   "private": false,
-  "description": "DSH plugin: 9Router RTK filters ported locally. Compresses tool output. No proxy, no API keys.",
+  "description": "Local, key-safe tool-output compressor for DeepSeek Harness (dsh). No proxy, no network calls, no credential access.",
   "type": "module",
   "main": "index.js",
   "exports": {
@@ -32,9 +32,9 @@
   "keywords": [
     "dsh-plugin",
     "deepseek-harness",
-    "rtk",
-    "token-saver",
-    "local"
+    "token-optimization",
+    "developer-tools",
+    "cli"
   ],
   "license": "MIT",
   "scripts": {
@@ -48,5 +48,8 @@
   },
   "bugs": {
     "url": "https://github.com/Parvaz-Jamei/dsh-local-saver/issues"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }
