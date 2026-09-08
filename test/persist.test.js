@@ -13,7 +13,7 @@ test("savePersistedStats is not called by parsePersist when off", () => {
   assert.equal(parsePersist({ DSH_LOCAL_SAVER_PERSIST: "yes" }), false);
 });
 
-test("savePersistedStats writes only calls and saved", async () => {
+test("savePersistedStats writes calls saved and char totals", async () => {
   const writes = [];
   const fsApi = {
     mkdir: async () => {},
@@ -21,19 +21,19 @@ test("savePersistedStats writes only calls and saved", async () => {
       writes.push({ path, body });
     },
   };
-  await savePersistedStats({ calls: 4, saved: 99, secret: "nope" }, fsApi);
+  await savePersistedStats({ calls: 4, saved: 99, charsBefore: 10, charsAfter: 3, secret: "nope" }, fsApi);
   assert.equal(writes.length, 1);
   const parsed = JSON.parse(writes[0].body);
-  assert.deepEqual(parsed, { calls: 4, saved: 99 });
+  assert.deepEqual(parsed, { calls: 4, saved: 99, charsBefore: 10, charsAfter: 3 });
   assert.equal("secret" in parsed, false);
 });
 
-test("loadPersistedStats reads only numeric pair", async () => {
+test("loadPersistedStats reads numeric fields and defaults missing", async () => {
   const fsApi = {
     readFile: async () => JSON.stringify({ calls: 2, saved: 10, extra: "x" }),
   };
   const loaded = await loadPersistedStats(fsApi);
-  assert.deepEqual(loaded, { calls: 2, saved: 10 });
+  assert.deepEqual(loaded, { calls: 2, saved: 10, charsBefore: 0, charsAfter: 0 });
 });
 
 test("plugin persist gate: no fs when PERSIST!=1", () => {

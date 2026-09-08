@@ -18,5 +18,5 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
-      - name: Unit tests (persist + compress)
-        run: node --test test/persist.test.js test/compress.test.js
+      - name: Unit tests
+        run: node --test test/*.test.js

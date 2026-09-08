@@ -16,14 +16,32 @@ function cap(val, depth, maxKeys) {
   return val;
 }
 
-export function jsonCompact(input) {
-  const raw = String(input).trim();
-  try {
-    const parsed = JSON.parse(raw);
-    return JSON.stringify(cap(parsed, 4, 24));
-  } catch {
-    return input;
+export function extractJsonCandidate(input) {
+  const raw = String(input);
+  const i = raw.search(/[\[{]/);
+  if (i < 0) return null;
+  const slice = raw.slice(i);
+  const attempts = [slice];
+  const end = Math.max(slice.lastIndexOf("}"), slice.lastIndexOf("]"));
+  if (end > 0) attempts.push(slice.slice(0, end + 1));
+  for (const s of attempts) {
+    try {
+      return JSON.parse(s);
+    } catch {
+      // try next
+    }
   }
+  return null;
+}
+
+export function looksLikeJson(text) {
+  return extractJsonCandidate(text) != null;
+}
+
+export function jsonCompact(input) {
+  const parsed = extractJsonCandidate(input);
+  if (parsed == null) return input;
+  return JSON.stringify(cap(parsed, 4, 24));
 }
 
 jsonCompact.filterName = "json-compact";

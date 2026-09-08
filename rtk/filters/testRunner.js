@@ -1,6 +1,6 @@
-const KEEP = /FAIL|FAILED|ERROR|Error|Assertion|Traceback|panic:|not ok |FAILED\s|FAILED\)|×|✖|wasm-bindgen|undefined reference/i;
-const SUMMARY = /passed|failed|skipped|errors?|failures?|ok \d+|Ran \d+|test result:|Tests:\s|FAIL\s+\d+|PASS\s+\d+/i;
-const PASS_LINE = /^(ok |✓|PASS |PASSED |\s*test .* \.\.\. ok)/i;
+const KEEP = /\b(FAIL|FAILED|ERROR|PANIC)\b|AssertionError|Traceback|panic:|not ok |undefined reference|[	imes✖]/i;
+const SUMMARY = /^=+|test session starts|test result:|Ran \d+|Tests:\s|\d+ (passed|failed|skipped)|ok \d+ (failed|passed)/i;
+const PASS_LINE = /\bPASSED\b|^\s*(ok |✓|PASS )|\.\.\. ok$/i;
 
 export function testRunner(input) {
   const lines = String(input).split("\n");
@@ -10,6 +10,10 @@ export function testRunner(input) {
   for (const line of lines) {
     const t = line.trim();
     if (!t) continue;
+    if (PASS_LINE.test(t)) {
+      passed += 1;
+      continue;
+    }
     if (KEEP.test(line)) {
       failed += 1;
       kept.push(line);
@@ -17,10 +21,6 @@ export function testRunner(input) {
     }
     if (SUMMARY.test(line)) {
       kept.push(line);
-      continue;
-    }
-    if (PASS_LINE.test(t) || /\.\.\. ok$/.test(t) || /PASSED/.test(t)) {
-      passed += 1;
       continue;
     }
   }
