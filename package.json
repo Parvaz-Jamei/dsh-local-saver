@@ -1,55 +1,20 @@
 {
   "name": "dsh-local-saver",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "private": false,
   "description": "Local, key-safe tool-output compressor for DeepSeek Harness (dsh). No proxy, no network calls, no credential access.",
   "type": "module",
   "main": "index.js",
-  "exports": {
-    ".": "./index.js",
-    "./package.json": "./package.json"
-  },
-  "files": [
-    "index.js",
-    "compress.js",
-    "saver-core.js",
-    "persist.js",
-    "cordis.patch.yml",
-    "NOTICE",
-    "LICENSE",
-    "rtk/**",
-    "docs/**"
-  ],
-  "peerDependencies": {
-    "@deepseek-ai/cordis": "*",
-    "@deepseek-ai/dsh-tools": "*"
-  },
-  "dsh": {
-    "bundle": {
-      "patch": "./cordis.patch.yml"
-    }
-  },
-  "keywords": [
-    "dsh-plugin",
-    "deepseek-harness",
-    "token-optimization",
-    "developer-tools",
-    "cli"
-  ],
+  "exports": { ".": "./index.js", "./package.json": "./package.json" },
+  "files": ["index.js", "compress.js", "saver-core.js", "persist.js", "cordis.patch.yml", "NOTICE", "LICENSE", "rtk/**", "docs/**"],
+  "peerDependencies": { "@deepseek-ai/cordis": "*", "@deepseek-ai/dsh-tools": "*" },
+  "dsh": { "bundle": { "patch": "./cordis.patch.yml" } },
+  "keywords": ["dsh-plugin", "deepseek-harness", "token-optimization", "developer-tools", "cli"],
   "license": "MIT",
-  "scripts": {
-    "test": "node --test test/*.test.js"
-  },
+  "scripts": { "test": "node --test test/*.test.js" },
   "author": "Parvaz Jamei <https://github.com/Parvaz-Jamei>",
   "homepage": "https://github.com/Parvaz-Jamei/dsh-local-saver",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/Parvaz-Jamei/dsh-local-saver.git"
-  },
-  "bugs": {
-    "url": "https://github.com/Parvaz-Jamei/dsh-local-saver/issues"
-  },
-  "engines": {
-    "node": ">=20"
-  }
+  "repository": { "type": "git", "url": "git+https://github.com/Parvaz-Jamei/dsh-local-saver.git" },
+  "bugs": { "url": "https://github.com/Parvaz-Jamei/dsh-local-saver/issues" },
+  "engines": { "node": ">=20" }
 }
